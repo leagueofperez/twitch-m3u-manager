@@ -1,5 +1,7 @@
 services:
   twitch-m3u-manager:
+    container_name: 'twitch-m3u-manager'
+    image: 'twitch-m3u-manager'
     build: .
     restart: unless-stopped
     ports:
