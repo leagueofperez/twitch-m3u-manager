@@ -6,6 +6,45 @@ the playlist is downloaded or requested. Twitch stream URLs expire, so the
 application stores channel identities—not expiring URLs—and refreshes them for
 every export.
 
+## Twitch authentication
+
+The app uses Twitch's official Helix API to check whether channels are live.
+It authenticates server-to-server with an OAuth app access token, so no Twitch
+user login or user authorization is needed. Configure these environment
+variables:
+
+| Variable | Description |
+| --- | --- |
+| `TWITCH_CLIENT_ID` | Client ID for your Twitch developer application |
+| `TWITCH_CLIENT_SECRET` | Client secret for that application; keep it private |
+
+To obtain them, sign in to the [Twitch Developer Console](https://dev.twitch.tv/console/apps),
+register an application, then copy its Client ID and generate/copy its Client
+Secret from the application settings. Do not commit the secret to source
+control or share it publicly.
+
+Load both variables into the environment of the process that runs the app. For
+example, in a local shell:
+
+```sh
+export TWITCH_CLIENT_ID="your-client-id"
+export TWITCH_CLIENT_SECRET="your-client-secret"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+For Docker Compose, put the same variable names in a `.env` file beside
+`docker-compose.yml`; Compose reads it automatically:
+
+```dotenv
+TWITCH_CLIENT_ID=your-client-id
+TWITCH_CLIENT_SECRET=your-client-secret
+```
+
+Keep `.env` out of version control. The app exchanges the credentials for an
+app access token and caches it until shortly before it expires. Helix handles
+live-status checks; playback-token extraction still uses Twitch's existing
+GraphQL/Usher flow to preserve HLS playlist exports.
+
 ## Run locally
 
 ```sh
@@ -37,6 +76,14 @@ Playlist metadata is stored as JSON under `data/`. Set
 `TWITCH_M3U_DATA_DIR` to use another directory. Optional HTTP Basic
 authentication is enabled when both `TWITCH_M3U_AUTH_USER` and
 `TWITCH_M3U_AUTH_PASSWORD` are set. `/health` remains unauthenticated.
+
+Live-channel checks use Twitch's official Helix API and require a Twitch
+developer application's `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` in the
+environment. The app obtains and caches an app access token using OAuth's
+client-credentials flow. Checks query up to 100 channels per Helix request and
+split larger checks into additional requests. Playback-token extraction still
+uses Twitch's existing GraphQL/Usher flow because Helix does not provide HLS
+playback tokens.
 
 ## Migrate existing sample playlists
 

@@ -5,10 +5,13 @@ from urllib.parse import urlencode
 
 import requests
 
+from app.config import get_settings
 from twitch.errors import ChannelNotFound, ChannelOffline, TwitchError, TwitchRateLimited
 
 CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 GQL_URL = "https://gql.twitch.tv/gql"
+TOKEN_URL = "https://id.twitch.tv/oauth2/token"
+HELIX_STREAMS_URL = "https://api.twitch.tv/helix/streams"
 USHER_URL = "https://usher.ttvnw.net"
 SUPPORTED_CODECS = "h264"
 
@@ -18,6 +21,83 @@ HASH_STREAM_METADATA = "b57f9b910f8cd1a4659d894fe7550ccc81ec9052c01e438b290fd66a
 LIVE_STATUS_CACHE_TTL = 20
 _live_status_cache = {}
 _live_status_lock = threading.Lock()
+_app_token_lock = threading.Lock()
+_app_access_token = None
+_app_access_token_expires_at = 0
+_app_access_token_credentials = None
+
+
+def _raise_http_error(response, action):
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        if response.status_code == 429:
+            raise TwitchRateLimited(response.headers.get("Retry-After")) from exc
+        raise TwitchError(
+            f"Twitch {action} failed (HTTP {response.status_code})."
+        ) from exc
+
+
+def _get_app_access_token(settings):
+    global _app_access_token, _app_access_token_expires_at
+    global _app_access_token_credentials
+
+    client_id = settings.twitch_client_id
+    client_secret = settings.twitch_client_secret
+    if not client_id or not client_secret:
+        raise TwitchError(
+            "Configura TWITCH_CLIENT_ID y TWITCH_CLIENT_SECRET para consultar "
+            "la API oficial de Twitch."
+        )
+
+    credentials = (client_id, client_secret)
+    now = time.monotonic()
+    with _app_token_lock:
+        if (
+            _app_access_token
+            and _app_access_token_credentials == credentials
+            and _app_access_token_expires_at > now
+        ):
+            return _app_access_token
+
+        try:
+            response = requests.post(
+                TOKEN_URL,
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "client_credentials",
+                },
+                timeout=25,
+            )
+            _raise_http_error(response, "authentication")
+            token_data = response.json()
+        except TwitchRateLimited:
+            raise
+        except TwitchError:
+            raise
+        except requests.RequestException as exc:
+            raise TwitchError(
+                f"No se pudo autenticar con Twitch: {exc.__class__.__name__}."
+            ) from exc
+
+        token = token_data.get("access_token") if isinstance(token_data, dict) else None
+        expires_in = token_data.get("expires_in") if isinstance(token_data, dict) else None
+        if (
+            not isinstance(token, str)
+            or not token
+            or not isinstance(expires_in, int)
+            or expires_in <= 0
+        ):
+            raise TwitchError("Twitch devolvió una respuesta de autenticación inválida.")
+
+        refresh_margin = min(60, max(1, expires_in * 0.1))
+        _app_access_token = token
+        _app_access_token_credentials = credentials
+        _app_access_token_expires_at = time.monotonic() + max(
+            0, expires_in - refresh_margin
+        )
+        return token
 
 
 def _gql(queries):
@@ -60,7 +140,7 @@ def _raise_graphql_errors(response):
 
 
 def check_live_channels(channels):
-    """Return live status for channels using cached, batched Twitch queries."""
+    """Return cached live status for channels using authenticated Helix queries."""
     unique = sorted(set(channel.casefold() for channel in channels))
     if not unique:
         return {}
@@ -76,46 +156,50 @@ def check_live_channels(channels):
             else:
                 uncached.append(channel)
 
-    for start in range(0, len(uncached), 5):
-        batch = uncached[start:start + 5]
-        queries = []
-        for channel in batch:
-            queries.append(
-                _persisted_query(
-                    "StreamMetadata",
-                    HASH_STREAM_METADATA,
-                    channelLogin=channel,
-                    includeIsDJ=True,
+    if uncached:
+        settings = get_settings()
+        token = _get_app_access_token(settings)
+        headers = {
+            "Client-ID": settings.twitch_client_id,
+            "Authorization": f"Bearer {token}",
+        }
+        for start in range(0, len(uncached), 100):
+            batch = uncached[start:start + 100]
+            try:
+                response = requests.get(
+                    HELIX_STREAMS_URL,
+                    params=[("user_login", channel) for channel in batch],
+                    headers=headers,
+                    timeout=25,
                 )
-            )
+                _raise_http_error(response, "live status lookup")
+                response_data = response.json()
+            except TwitchRateLimited:
+                raise
+            except TwitchError:
+                raise
+            except requests.RequestException as exc:
+                raise TwitchError(
+                    f"No se pudo contactar con Twitch: {exc.__class__.__name__}."
+                ) from exc
+            if not isinstance(response_data, dict) or not isinstance(
+                response_data.get("data"), list
+            ):
+                raise TwitchError(
+                    "Twitch devolvió una respuesta incompleta al comprobar canales."
+                )
 
-        try:
-            data = _gql(queries)
-        except TwitchRateLimited:
-            raise
-        except requests.RequestException as exc:
-            raise TwitchError(
-                f"No se pudo contactar con Twitch: {exc.__class__.__name__}."
-            ) from exc
-        if not isinstance(data, list) or len(data) != len(queries):
-            raise TwitchError("Twitch devolvió una respuesta incompleta al comprobar canales.")
-
-        for index, channel in enumerate(batch):
-            metadata_response = data[index]
-            if not isinstance(metadata_response, dict):
-                raise TwitchError(f"Twitch devolvió un estado inválido para '{channel}'.")
-            if _raise_graphql_errors(metadata_response):
-                raise TwitchError(f"No se pudo comprobar el estado de '{channel}'.")
-            metadata = metadata_response.get("data") or {}
-            if not isinstance(metadata, dict):
-                raise TwitchError(f"Twitch devolvió un estado inválido para '{channel}'.")
-            user = metadata.get("user")
-            if user is None:
-                statuses[channel] = False
-                continue
-            if not isinstance(user, dict):
-                raise TwitchError(f"Twitch no devolvió el estado de '{channel}'.")
-            statuses[channel] = user.get("stream") is not None
+            live_channels = set()
+            for stream in response_data["data"]:
+                if not isinstance(stream, dict) or not isinstance(
+                    stream.get("user_login"), str
+                ):
+                    raise TwitchError(
+                        "Twitch devolvió un estado inválido al comprobar canales."
+                    )
+                live_channels.add(stream["user_login"].casefold())
+            for channel in batch:
+                statuses[channel] = channel in live_channels
 
     expires_at = time.monotonic() + LIVE_STATUS_CACHE_TTL
     with _live_status_lock:

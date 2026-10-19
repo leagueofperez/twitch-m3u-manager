@@ -9,5 +9,7 @@ services:
       TWITCH_M3U_DATA_DIR: /app/data
       TWITCH_M3U_AUTH_USER: ${TWITCH_M3U_AUTH_USER:-}
       TWITCH_M3U_AUTH_PASSWORD: ${TWITCH_M3U_AUTH_PASSWORD:-}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
     volumes:
       - ./data:/app/data
