@@ -1,0 +1,13 @@
+services:
+  twitch-m3u-manager:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      PORT: "8000"
+      TWITCH_M3U_DATA_DIR: /app/data
+      TWITCH_M3U_AUTH_USER: ${TWITCH_M3U_AUTH_USER:-}
+      TWITCH_M3U_AUTH_PASSWORD: ${TWITCH_M3U_AUTH_PASSWORD:-}
+    volumes:
+      - ./data:/app/data

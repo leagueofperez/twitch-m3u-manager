@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Twitch M3U Manager{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%239146ff'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { 300: '#bf94ff', 400: '#a970ff', 500: '#9146ff', 600: '#772ce8', 700: '#5c16c5' } }
+        }
+      }
+    };
+  </script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .card { @apply rounded-xl border border-slate-800 bg-slate-900/60 p-5; }
+      .input { @apply w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500; }
+      .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400; }
+      .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }
+      .btn-primary { @apply bg-brand-500 text-white hover:bg-brand-600; }
+      .btn-ghost { @apply border border-slate-700 text-slate-200 hover:bg-slate-800; }
+      .btn-danger { @apply border border-red-900/70 text-red-300 hover:bg-red-950; }
+      .btn-sm { @apply px-2.5 py-1 text-xs; }
+    }
+  </style>
+</head>
+<body class="min-h-full bg-slate-950 text-slate-200 antialiased">
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+      <a href="/" class="flex items-center gap-2.5 font-semibold text-white">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 fill-white" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+        Twitch M3U Manager
+      </a>
+      <nav class="flex items-center gap-1 text-sm">
+        <a href="/" class="rounded-lg px-3 py-1.5 {{ 'bg-slate-800 text-white' if active == 'home' else 'text-slate-400 hover:text-white' }}">Listas</a>
+        <a href="/docs" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white">API</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toasts" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</body>
+</html>

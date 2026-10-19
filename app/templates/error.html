@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% set active = 'home' %}
+{% block title %}Error {{ status }} · Twitch M3U Manager{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md py-16 text-center">
+  <p class="text-5xl font-semibold text-brand-400">{{ status }}</p>
+  <p class="mt-4 text-slate-300">{{ message }}</p>
+  <a href="/" class="btn btn-primary mt-8">Volver a las listas</a>
+</div>
+{% endblock %}
