@@ -256,13 +256,60 @@ def test_web_interface_has_no_legacy_proxy_or_generator_features(client, monkeyp
     assert client.get("/api/playlists/demo/live-status").status_code == 404
 
 
-def test_optional_basic_auth_uses_new_project_settings(client, monkeypatch):
-    client.post("/api/playlists", json={"name": "demo"})
-    monkeypatch.setenv("TWITCH_M3U_AUTH_USER", "admin")
-    monkeypatch.setenv("TWITCH_M3U_AUTH_PASSWORD", "secret")
+def test_authentication_is_required_except_for_health(client):
+    assert client.get("/health").status_code == 200
+    assert client.get(
+        "/api/playlists", headers={"X-API-Key": ""}
+    ).status_code == 401
+    assert client.get(
+        "/api/playlists", headers={"X-API-Key": "invalid"}
+    ).status_code == 401
+    assert client.get("/openapi.json", headers={"X-API-Key": ""}).status_code == 401
+    assert client.get("/docs", headers={"X-API-Key": ""}).status_code == 401
+    assert client.get("/docs").status_code == 200
+    schema = client.get("/openapi.json").json()
+    assert schema["paths"]["/api/playlists"]["get"]["security"] == [
+        {"ApiKeyHeader": []}
+    ]
+    assert "apiKey" in {
+        parameter["name"]
+        for parameter in schema["paths"]["/m3u/{name}.m3u"]["get"]["parameters"]
+    }
 
-    assert client.get("/api/playlists").status_code == 401
-    assert client.get("/api/playlists", auth=("admin", "secret")).status_code == 200
+
+def test_m3u_download_accepts_api_key_header_or_camel_case_query_parameter(client):
+    client.post("/api/playlists", json={"name": "demo"})
+    key = client.headers["X-API-Key"]
+    from app.auth_store import create_api_key
+    from app.config import get_settings
+
+    _reader, read_key = create_api_key(
+        get_settings().auth_db_path, "m3u-reader", "read-only"
+    )
+    client.headers.pop("X-API-Key")
+
+    assert client.get("/m3u/demo.m3u").status_code == 401
+    assert client.get(
+        "/m3u/demo.m3u", headers={"X-API-Key": key}
+    ).status_code == 200
+    assert client.get(
+        "/m3u/demo.m3u", params={"apiKey": key}
+    ).status_code == 200
+    assert client.get(
+        "/m3u/demo.m3u", params={"apiKey": read_key}
+    ).status_code == 200
+    assert client.get(
+        "/m3u/demo.m3u", params={"api_key": key}
+    ).status_code == 401
+    assert client.get(
+        "/api/playlists",
+        headers={"Authorization": f"Bearer {read_key}"},
+    ).status_code == 200
+    assert client.put(
+        "/m3u/imported.m3u?apiKey=" + read_key,
+        content="#EXTM3U\n",
+        headers={"content-type": "text/plain"},
+    ).status_code == 401
     assert client.get("/health").status_code == 200
 
 

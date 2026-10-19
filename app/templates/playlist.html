@@ -15,11 +15,14 @@
     <div class="flex flex-wrap gap-2">
       <a href="/m3u/{{ name }}.m3u?download=true" class="btn btn-ghost">Descargar M3U</a>
       <button type="button" class="btn btn-ghost" data-copy-path="/m3u/{{ name }}.m3u">Copiar enlace</button>
+      {% if api_key_role == 'read-write' %}
       <button type="button" class="btn btn-danger" data-action="delete-playlist">Eliminar lista</button>
+      {% endif %}
     </div>
   </div>
 
-  <div class="mb-6 grid gap-6 md:grid-cols-2">
+  <div class="mb-6 grid gap-6 {{ 'md:grid-cols-2' if api_key_role == 'read-write' else 'md:grid-cols-1' }}">
+    {% if api_key_role == 'read-write' %}
     <section class="card">
       <h2 class="mb-1 text-base font-medium text-white">Añadir canales de Twitch</h2>
       <p class="mb-4 text-xs text-slate-400">Al añadir canales se comprueba si están en directo. También se vuelven a comprobar al exportar el M3U; solo los activos reciben un enlace.</p>
@@ -31,6 +34,7 @@
         </div>
       </form>
     </section>
+    {% endif %}
     <section class="card">
       <h2 class="mb-1 text-base font-medium text-white">Estado de los canales</h2>
       <p class="text-sm text-slate-400">El estado solo se consulta cuando añades canales o descargas el M3U. Los canales offline siguen guardados, pero se omiten de la exportación.</p>
@@ -49,7 +53,7 @@
           <tr>
             <th class="px-4 py-3 font-medium">Nombre</th>
             <th class="px-4 py-3 font-medium">Origen</th>
-            <th class="px-4 py-3 text-right font-medium">Acciones</th>
+            {% if api_key_role == 'read-write' %}<th class="px-4 py-3 text-right font-medium">Acciones</th>{% endif %}
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800">
@@ -64,12 +68,14 @@
               <span class="block truncate font-mono text-xs text-slate-400" title="{{ entry.url }}">URL directa · {{ entry.url }}</span>
               {% endif %}
             </td>
+            {% if api_key_role == 'read-write' %}
             <td class="whitespace-nowrap px-4 py-3 text-right">
               {% if entry.url %}
               <button type="button" class="btn btn-ghost btn-sm" data-copy="{{ entry.url }}">Copiar URL</button>
               {% endif %}
               <button type="button" class="btn btn-danger btn-sm" data-action="delete-channel" data-channel="{{ entry.name }}">Eliminar</button>
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>

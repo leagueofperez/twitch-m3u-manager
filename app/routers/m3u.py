@@ -1,27 +1,36 @@
 """M3U download and import endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
 from .. import m3u
 from ..extraction import render_playlist
 from ..schemas import PlaylistDetail
-from ..security import require_auth
+from ..security import require_read, require_write
 from .api import detail
 
 MAX_IMPORT_BYTES = 1_000_000
 
-router = APIRouter(prefix="/m3u", tags=["m3u"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/m3u", tags=["m3u"])
 
 
 @router.get(
     "/{name}.m3u",
     response_class=PlainTextResponse,
     summary="Download a refreshed M3U playlist",
+    dependencies=[Depends(require_read)],
 )
-async def download_m3u(name: str, download: bool = False) -> PlainTextResponse:
+async def download_m3u(
+    name: str,
+    download: bool = False,
+    api_key: str | None = Query(
+        default=None,
+        alias="apiKey",
+        description="Optional API key for clients that cannot send X-API-Key headers.",
+    ),
+) -> PlainTextResponse:
     entries = m3u.load_playlist(name)
     content = await run_in_threadpool(render_playlist, entries)
     disposition = "attachment" if download else "inline"
@@ -39,6 +48,7 @@ async def download_m3u(name: str, download: bool = False) -> PlainTextResponse:
     "/{name}.m3u",
     response_model=PlaylistDetail,
     summary="Import or replace a playlist from M3U text",
+    dependencies=[Depends(require_write)],
 )
 async def import_m3u(name: str, request: Request) -> PlaylistDetail:
     body = await request.body()

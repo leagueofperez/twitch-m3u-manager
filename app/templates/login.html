@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión · Twitch M3U Manager{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md">
+  <section class="card">
+    <h1 class="text-xl font-semibold text-white">Iniciar sesión</h1>
+    <p class="mt-2 text-sm text-slate-400">Inicia sesión con las credenciales configuradas para esta aplicación.</p>
+    <form id="login-form" class="mt-6 space-y-4" data-next="{{ next }}">
+      <div>
+        <label class="label" for="username">Usuario</label>
+        <input id="username" name="username" type="text" class="input" required autocomplete="username" spellcheck="username">
+      </div>
+      <div>
+        <label class="label" for="password">Contraseña</label>
+        <input id="password" name="password" type="password" class="input" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary w-full">Entrar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -38,8 +38,11 @@
         Twitch M3U Manager
       </a>
       <nav class="flex items-center gap-1 text-sm">
+        {% if api_key_role %}
         <a href="/" class="rounded-lg px-3 py-1.5 {{ 'bg-slate-800 text-white' if active == 'home' else 'text-slate-400 hover:text-white' }}">Listas</a>
         <a href="/docs" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white">API</a>
+        <button type="button" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white" data-action="logout">Salir</button>
+        {% endif %}
       </nav>
     </div>
   </header>

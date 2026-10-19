@@ -14,9 +14,9 @@ from ..schemas import (
     PlaylistDetail,
     PlaylistSummary,
 )
-from ..security import require_auth
+from ..security import require_read, require_write
 
-router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/api", tags=["api"])
 
 
 def detail(
@@ -41,7 +41,12 @@ def detail(
     )
 
 
-@router.get("/playlists", response_model=list[PlaylistSummary], summary="List playlists")
+@router.get(
+    "/playlists",
+    response_model=list[PlaylistSummary],
+    summary="List playlists",
+    dependencies=[Depends(require_read)],
+)
 def list_playlists() -> list[PlaylistSummary]:
     return [
         PlaylistSummary(name=playlist.name, count=playlist.count, m3u=f"/m3u/{playlist.name}.m3u")
@@ -54,6 +59,7 @@ def list_playlists() -> list[PlaylistSummary]:
     response_model=PlaylistDetail,
     status_code=status.HTTP_201_CREATED,
     summary="Create playlist",
+    dependencies=[Depends(require_write)],
 )
 def create_playlist(body: PlaylistCreate) -> PlaylistDetail:
     m3u.normalize_playlist_name(body.name)
@@ -69,7 +75,12 @@ def create_playlist(body: PlaylistCreate) -> PlaylistDetail:
     )
 
 
-@router.get("/playlists/{name}", response_model=PlaylistDetail, summary="Get playlist")
+@router.get(
+    "/playlists/{name}",
+    response_model=PlaylistDetail,
+    summary="Get playlist",
+    dependencies=[Depends(require_read)],
+)
 def get_playlist(name: str) -> PlaylistDetail:
     return detail(name, m3u.load_playlist(name))
 
@@ -79,6 +90,7 @@ def get_playlist(name: str) -> PlaylistDetail:
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     summary="Delete playlist",
+    dependencies=[Depends(require_write)],
 )
 def delete_playlist(name: str) -> Response:
     m3u.delete_playlist(name)
@@ -89,6 +101,7 @@ def delete_playlist(name: str) -> Response:
     "/playlists/{name}/channels",
     response_model=AddChannelsResponse,
     summary="Add Twitch channels",
+    dependencies=[Depends(require_write)],
 )
 def add_channels(name: str, body: AddChannelsRequest) -> AddChannelsResponse:
     current = m3u.load_playlist(name)
@@ -115,6 +128,7 @@ def add_channels(name: str, body: AddChannelsRequest) -> AddChannelsResponse:
     "/playlists/{name}/channels/{channel}",
     response_model=PlaylistDetail,
     summary="Remove channel or entry",
+    dependencies=[Depends(require_write)],
 )
 def delete_channel(name: str, channel: str) -> PlaylistDetail:
     return detail(name, m3u.remove_channel(name, channel))

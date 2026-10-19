@@ -101,6 +101,11 @@
   }
 
   const actions = {
+    async logout() {
+      await api('POST', '/auth/logout', {});
+      location.href = '/login';
+    },
+
     async 'delete-playlist'() {
       const name = playlistName();
       if (!confirm(`¿Eliminar la lista '${name}'? Esta acción no se puede deshacer.`)) return;
@@ -134,6 +139,17 @@
   });
 
   const forms = {
+    async 'login-form'(form) {
+      const credentials = Object.fromEntries(new FormData(form));
+      const result = await api('POST', '/auth/login', {
+        username: credentials.username,
+        password: credentials.password,
+        next: form.dataset.next || '/',
+      });
+      form.elements.password.value = '';
+      location.href = result.redirect;
+    },
+
     async 'create-form'(form) {
       const data = Object.fromEntries(new FormData(form));
       const created = await api('POST', '/api/playlists', {
