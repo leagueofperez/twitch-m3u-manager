@@ -90,6 +90,8 @@ to `*` if clients can reach the app directly. Run tests with
 | `TWITCH_M3U_DATA_DIR` | `data/` | Directory for playlist JSON |
 | `TWITCH_M3U_AUTH_DB` | `<data-dir>/auth.sqlite3` | SQLite database for API keys and browser sessions |
 | `TWITCH_M3U_COOKIE_SECURE` | `true` | Send browser-session cookies only over HTTPS; set to `false` only for local HTTP |
+| `TWITCH_M3U_PUBLIC_ORIGIN` | Request origin | Public HTTP(S) origin used for canonical and social metadata URLs, e.g. `https://m3u.example.com` |
+| `TWITCH_M3U_TWITTER_HANDLE` | — | Optional X/Twitter account handle, including `@`, used for social attribution |
 | `PORT` | `8000` | Listening port in `start.sh` and host port in Docker Compose |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Trusted proxy addresses for Uvicorn's forwarded-header support |
 

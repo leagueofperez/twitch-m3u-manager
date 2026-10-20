@@ -3,8 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set page_title = self.title() | striptags | trim %}
+  {% set page_description %}{% block description %}Administra listas M3U de canales de Twitch y actualiza sus enlaces HLS al exportarlas.{% endblock %}{% endset %}
+  <meta name="description" content="{{ page_description }}">
+  <meta name="theme-color" content="#6441a5">
   <title>{% block title %}Twitch M3U Manager{% endblock %}</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%239146ff'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='favicon.svg') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', path='favicon-48x48.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', path='apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', path='site.webmanifest') }}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_ES">
+  <meta property="og:site_name" content="Twitch M3U Manager">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_description }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:image" content="{{ canonical_origin }}/static/og-image.png">
+  <meta property="og:image:alt" content="Twitch M3U Manager: gestión de listas M3U y actualización de enlaces HLS de Twitch.">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_description }}">
+  <meta name="twitter:image" content="{{ canonical_origin }}/static/og-image.png">
+  <meta name="twitter:image:alt" content="Twitch M3U Manager: gestión de listas M3U y actualización de enlaces HLS de Twitch.">
+  {% if twitter_handle %}
+  <meta name="twitter:site" content="{{ twitter_handle }}">
+  {% endif %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": {{ page_title | tojson }},
+    "description": {{ page_description | tojson }},
+    "url": {{ canonical_url | tojson }},
+    "inLanguage": "es",
+    "isPartOf": {
+      "@type": "WebApplication",
+      "name": "Twitch M3U Manager",
+      "url": {{ (canonical_origin ~ '/') | tojson }},
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Any"
+    }
+  }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -27,6 +74,7 @@
       .btn-sm { @apply px-2.5 py-1 text-xs; }
     }
   </style>
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
 </head>
 <body class="min-h-full bg-slate-950 text-slate-200 antialiased">
   <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# /extract es un endpoint POST: no hay nada que indexar.
+Disallow: /extract
