@@ -58,7 +58,11 @@ cp .env.example .env  # edit credentials; set TWITCH_M3U_COOKIE_SECURE=false for
 Open <http://localhost:8000>. The interactive API is at <http://localhost:8000/docs>.
 `start.sh` loads `.env`; if you run Uvicorn directly, export the variables
 yourself first. Use HTTPS in deployments and leave the secure-cookie setting
-enabled. Run tests with `pip install -r requirements-dev.txt && pytest`.
+enabled. For a trusted reverse proxy, forward the original `Host` and
+`X-Forwarded-Proto` headers and set `FORWARDED_ALLOW_IPS` to the proxy's IP or
+CIDR so Uvicorn can safely recognize the external HTTPS scheme. Do not set it
+to `*` if clients can reach the app directly. Run tests with
+`pip install -r requirements-dev.txt && pytest`.
 
 ## Playlists
 
@@ -87,6 +91,7 @@ enabled. Run tests with `pip install -r requirements-dev.txt && pytest`.
 | `TWITCH_M3U_AUTH_DB` | `<data-dir>/auth.sqlite3` | SQLite database for API keys and browser sessions |
 | `TWITCH_M3U_COOKIE_SECURE` | `true` | Send browser-session cookies only over HTTPS; set to `false` only for local HTTP |
 | `PORT` | `8000` | Listening port in `start.sh` and host port in Docker Compose |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Trusted proxy addresses for Uvicorn's forwarded-header support |
 
 Set the Twitch and login variables before starting the app. The login
 credentials are required; `.env.example` lists all supported variables.
@@ -96,25 +101,54 @@ existing browser sessions. The SQLite database contains API-key hashes and
 sessions, not plaintext API keys; keep it on persistent storage and restrict
 access to it.
 
-Use the username/password login at `/login` for the browser UI. For external
-API clients, use API keys: read-only keys can list playlists, view playlist
-details, and download M3U files; read-write keys can also create, import, edit,
-and delete playlists. API keys can be sent with the `X-API-Key` header or as a
-Bearer token. Only `/health`, the login page, and login/logout routes are
-available without authentication; static UI assets are also public. The docs
-and OpenAPI schema require authentication. Create or revoke keys from the
-repository root:
+**Login troubleshooting:** the login form submits credentials by `POST` in
+the request body, never in the URL. If login succeeds but redirects back to
+`/login?next=/`, the browser likely did not send the session cookie. For plain
+HTTP on a trusted local network only, set `TWITCH_M3U_COOKIE_SECURE=false`;
+otherwise serve the app over HTTPS and keep it `true`. Behind a reverse proxy,
+configure `FORWARDED_ALLOW_IPS` for the proxy and preserve the original `Host`
+and `X-Forwarded-Proto` headers; otherwise same-origin validation may reject
+the login or secure-cookie behavior may not match the external URL.
+
+Use the username/password login at `/login` for the browser UI. The configured
+environment account is created or updated at startup. If it has no active
+default key, startup creates a read-write API key and prints it once to the
+application log. Protect these logs like credentials and copy the key to a
+secret manager; it is not stored in plaintext and will not be shown again.
+Manage users and API keys with the interactive CLI:
 
 ```sh
-python -m app.auth_cli create --name owner --role read-write
-python -m app.auth_cli create --name player --role read-only
-python -m app.auth_cli list
-python -m app.auth_cli revoke <key-id>
+python -m app.auth_cli
 ```
 
-The CLI defaults to `data/auth.sqlite3`, matching the app's default. If you
-override `TWITCH_M3U_AUTH_DB`, pass the same path with `--db` or export that
-variable in the shell before running the CLI.
+The menu supports listing, creating, password-updating, and deleting users.
+Passwords are entered securely; changing one invalidates the user's active
+browser sessions. Deleting a user revokes their API keys and removes their
+sessions. Creating a user also creates a default read-write API key and
+displays it once. Protect the output and save the key securely.
+
+For external API clients, create API keys assigned to an existing user.
+Read-only keys can list playlists, view playlist details, and download M3U
+files; read-write keys can also create, import, edit, and delete playlists.
+The key's role determines its permissions; the owner is recorded for
+attribution and key management. The menu can create keys, list key metadata,
+edit an active key's name, role, or owner, and revoke keys. Existing key
+secrets are not retrievable; newly created secrets are displayed only once.
+
+Keys created before the ownership feature are assigned to the configured
+environment user when the app starts. Deleting a user revokes their keys and
+removes active browser sessions. To replace a lost user key, create another
+key with the CLI; to replace a lost startup key, revoke it and restart the app
+so startup generates and prints a new default key.
+
+API keys can be sent with the `X-API-Key` header or as a Bearer token. Only
+`/health`, the login page, and login/logout routes are available without
+authentication; static UI assets are also public. The docs and OpenAPI schema
+require authentication.
+
+The CLI defaults to the app's configured auth database:
+`TWITCH_M3U_AUTH_DB`, or `<data-dir>/auth.sqlite3` when unset. At startup, the
+menu lets you keep that database or select another SQLite path.
 
 The CLI displays a new key only once. Use it in API calls with the
 `X-API-Key: <key>` header or `Authorization: Bearer <key>`. Browser login

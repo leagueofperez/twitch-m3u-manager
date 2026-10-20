@@ -4,9 +4,15 @@ from app.auth_store import (
     bootstrap_user,
     create_api_key,
     create_session,
+    create_user,
+    delete_user,
     get_api_key,
     get_session,
+    list_api_keys,
+    list_users,
     revoke_api_key,
+    update_api_key,
+    update_user_password,
     verify_user,
 )
 from app.config import get_settings
@@ -17,7 +23,7 @@ ORIGIN = {"Origin": "http://testserver"}
 
 def test_read_only_key_can_read_but_cannot_mutate(client):
     key, plaintext = create_api_key(
-        get_settings().auth_db_path, "reader", "read-only"
+        get_settings().auth_db_path, "reader", "read-only", "test-admin"
     )
     client.post("/api/playlists", json={"name": "visible"})
 
@@ -53,6 +59,8 @@ def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
     page = client.get("/login")
     assert page.status_code == 200
     assert 'id="login-form"' in page.text
+    assert 'method="post"' in page.text
+    assert 'action="/auth/login"' in page.text
 
     response = client.post(
         "/auth/login",
@@ -77,6 +85,41 @@ def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
     assert logout.status_code == 200
     assert get_session(get_settings().auth_db_path, session_token) is None
     assert client.get("/api/playlists").status_code == 401
+
+
+def test_login_form_posts_credentials_in_body_and_redirects_without_query(client):
+    client.headers.pop("X-API-Key")
+    page = client.get("/login?next=%2Fp%2Fdemo")
+    assert page.status_code == 200
+    assert "name=\"next\" value=\"/p/demo\"" in page.text
+
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": "test-admin",
+            "password": "test-password-long-enough",
+            "next": "/p/demo",
+        },
+        headers=ORIGIN,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert str(response.request.url) == "http://testserver/auth/login"
+    assert response.headers["location"] == "/p/demo"
+    assert response.cookies["tmm_session"]
+    assert "secure" not in response.headers["set-cookie"].lower()
+
+
+def test_login_endpoint_rejects_get_instead_of_putting_credentials_in_url(client):
+    response = client.get(
+        "/auth/login",
+        params={
+            "username": "test-admin",
+            "password": "test-password-long-enough",
+        },
+    )
+    assert response.status_code == 405
 
 
 def test_login_rejects_bad_passwords_and_external_redirects(client):
@@ -140,7 +183,7 @@ def test_cookie_authenticated_mutations_require_same_origin(client):
 
 def test_revoking_api_key_invalidates_api_key(client):
     db_path = get_settings().auth_db_path
-    key, plaintext = create_api_key(db_path, "revoke", "read-write")
+    key, plaintext = create_api_key(db_path, "revoke", "read-write", "test-admin")
 
     assert get_api_key(db_path, plaintext) == key
     assert revoke_api_key(db_path, key.id)
@@ -165,21 +208,32 @@ def test_startup_bootstraps_and_updates_environment_user(client):
     db_path = get_settings().auth_db_path
     assert verify_user(db_path, "test-admin", "test-password-long-enough")
     assert not verify_user(db_path, "test-admin", "wrong-password")
+    initial_key = bootstrap_user(
+        db_path, "test-admin", "test-password-long-enough"
+    )
+    assert initial_key is None
+    keys = list_api_keys(db_path)
+    default_key = next(key for key in keys if key["name"] == "default")
+    assert default_key["owner_username"] == "test-admin"
+    assert default_key["role"] == "read-write"
 
-    bootstrap_user(db_path, "test-admin", "updated-password-long-enough")
+    replacement = bootstrap_user(
+        db_path, "test-admin", "updated-password-long-enough"
+    )
+    assert replacement is None
     assert verify_user(db_path, "test-admin", "updated-password-long-enough")
     assert not verify_user(db_path, "test-admin", "test-password-long-enough")
 
 
-def test_startup_replaces_old_configured_username_and_invalidates_sessions(client):
+def test_startup_bootstrap_preserves_additional_users_and_sessions(client):
     db_path = get_settings().auth_db_path
     bootstrap_user(db_path, "previous-admin", "previous-password-long-enough")
     session_token, _expires_at = create_session(db_path, "previous-admin")
 
     bootstrap_user(db_path, "test-admin", "test-password-long-enough")
 
-    assert not verify_user(db_path, "previous-admin", "previous-password-long-enough")
-    assert get_session(db_path, session_token) is None
+    assert verify_user(db_path, "previous-admin", "previous-password-long-enough")
+    assert get_session(db_path, session_token).name == "previous-admin"
 
 
 def test_auth_database_migration_keeps_api_keys_but_drops_old_sessions(tmp_path):
@@ -215,6 +269,7 @@ def test_auth_database_migration_keeps_api_keys_but_drops_old_sessions(tmp_path)
         )
 
     initialize(db_path)
+    bootstrap_user(db_path, "migration-admin", "migration-password-long-enough")
 
     with sqlite3.connect(db_path) as connection:
         columns = {
@@ -223,12 +278,80 @@ def test_auth_database_migration_keeps_api_keys_but_drops_old_sessions(tmp_path)
         assert "username" in columns
         assert "api_key_id" not in columns
         assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
-        assert connection.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == 2
+        owner = connection.execute(
+            "SELECT owner_username FROM api_keys WHERE id = 'key-id'"
+        ).fetchone()[0]
+        assert owner == "migration-admin"
+        generated_key = connection.execute(
+            """SELECT name, role, owner_username FROM api_keys
+               WHERE id != 'key-id'"""
+        ).fetchone()
+        assert tuple(generated_key) == ("default", "read-write", "migration-admin")
 
 
 def test_bootstrap_requires_strong_password(client):
     with pytest.raises(ValueError, match="12 characters"):
         bootstrap_user(get_settings().auth_db_path, "weak-user", "short")
+
+
+def test_bootstrap_generates_one_default_key_for_new_configured_user(tmp_path):
+    from app.auth_store import get_api_key
+
+    db_path = tmp_path / "auth.sqlite3"
+    generated_key = bootstrap_user(
+        db_path, "first-admin", "first-admin-password-long-enough"
+    )
+
+    assert generated_key is not None
+    stored_key = get_api_key(db_path, generated_key)
+    assert stored_key.name == "default"
+    assert stored_key.owner_username == "first-admin"
+    assert stored_key.role == "read-write"
+    assert (
+        bootstrap_user(db_path, "first-admin", "first-admin-password-long-enough")
+        is None
+    )
+    assert sum(key["name"] == "default" for key in list_api_keys(db_path)) == 1
+
+
+def test_password_update_changes_credentials_and_revokes_sessions(tmp_path):
+    db_path = tmp_path / "auth.sqlite3"
+    create_user(db_path, "password-user", "original-password-long-enough")
+    session_token, _expires_at = create_session(db_path, "password-user")
+
+    assert update_user_password(
+        db_path, "password-user", "replacement-password-long-enough"
+    )
+    assert verify_user(db_path, "password-user", "replacement-password-long-enough")
+    assert not verify_user(db_path, "password-user", "original-password-long-enough")
+    assert get_session(db_path, session_token) is None
+    assert not update_user_password(
+        db_path, "missing-user", "replacement-password-long-enough"
+    )
+
+
+def test_api_key_metadata_update_validates_owner_and_preserves_secret(tmp_path):
+    db_path = tmp_path / "auth.sqlite3"
+    create_user(db_path, "first-owner", "first-owner-password-long-enough")
+    create_user(db_path, "second-owner", "second-owner-password-long-enough")
+    key, plaintext = create_api_key(
+        db_path, "original", "read-only", "first-owner"
+    )
+
+    assert update_api_key(
+        db_path, key.id, "renamed", "read-write", "second-owner"
+    )
+    updated = get_api_key(db_path, plaintext)
+    assert updated.id == key.id
+    assert updated.name == "renamed"
+    assert updated.role == "read-write"
+    assert updated.owner_username == "second-owner"
+    with pytest.raises(ValueError, match="user does not exist"):
+        update_api_key(db_path, key.id, "renamed", "read-write", "missing-user")
+    assert not update_api_key(
+        db_path, "missing-key", "renamed", "read-write", "second-owner"
+    )
 
 
 def test_startup_requires_login_credentials(client, monkeypatch):
@@ -245,51 +368,136 @@ def test_startup_requires_login_credentials(client, monkeypatch):
         asyncio.run(start())
 
 
-def test_cli_issues_lists_and_revokes_keys_without_persisting_plaintext(
+def test_interactive_cli_manages_users_and_api_keys(
     tmp_path, monkeypatch, capsys
 ):
     import sqlite3
     import sys
 
-    from app.auth_cli import main
+    import app.auth_cli as auth_cli
 
     db_path = tmp_path / "auth.sqlite3"
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "auth_cli",
-            "--db",
-            str(db_path),
-            "create",
-            "--name",
-            "cli-owner",
-            "--role",
-            "read-write",
-        ],
+    create_user(db_path, "cli-owner", "cli-owner-password-long-enough")
+    editable_key, old_plaintext = create_api_key(
+        db_path, "before", "read-only", "cli-owner"
     )
-    main()
-    created = capsys.readouterr().out
-    plaintext = created.split("API key (shown once): ", 1)[1].strip()
-    key_id = created.split("Key ID: ", 1)[1].splitlines()[0]
+    created_password = "new-user-password-long-enough"
+    updated_password = "replacement-password-long-enough"
+    plaintexts = iter(
+        [
+            created_password,
+            created_password,
+            updated_password,
+            updated_password,
+        ]
+    )
+    responses = iter(
+        [
+            "",  # Keep the configured database.
+            "1", "2", "api-user",  # Create a user.
+            "0",  # Return to the main menu.
+            "2", "2", "created-key", "read-only", "api-user",  # Create key.
+            "1",  # List keys; secrets must not appear.
+            "3", editable_key.id, "renamed", "read-write", "api-user",
+            "4", editable_key.id, "y",  # Revoke edited key.
+            "0",  # Return to main menu.
+            "1", "3", "api-user",  # Change user password.
+            "4", "cli-owner", "y",  # Delete another user.
+            "0",  # Return to main menu.
+            "0",  # Exit.
+        ]
+    )
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+    monkeypatch.setattr(auth_cli.getpass, "getpass", lambda _prompt: next(plaintexts))
+    monkeypatch.setattr(sys, "argv", ["auth_cli"])
+    monkeypatch.setenv("TWITCH_M3U_AUTH_DB", str(db_path))
 
+    auth_cli.main()
+    output = capsys.readouterr().out
+
+    assert output.count("Default read-write API key (shown once):") == 1
+    assert output.count("\nAPI key (shown once):") == 1
+    assert old_plaintext not in output
+    default_secret = output.split(
+        "Default read-write API key (shown once): ", 1
+    )[1].splitlines()[0]
+    created_secret = output.split("\nAPI key (shown once): ", 1)[1].splitlines()[0]
+    assert output.count(default_secret) == 1
+    assert output.count(created_secret) == 1
+    default_key = get_api_key(db_path, default_secret)
+    assert default_key.name == "default"
+    assert default_key.owner_username == "api-user"
+    created_key_secret = get_api_key(db_path, created_secret)
+    assert created_key_secret.name == "created-key"
+    assert created_key_secret.owner_username == "api-user"
     with sqlite3.connect(db_path) as connection:
         stored_hash = connection.execute(
-            "SELECT key_hash FROM api_keys WHERE id = ?", (key_id,)
+            "SELECT key_hash FROM api_keys WHERE id = ?",
+            (created_key_secret.id,),
         ).fetchone()[0]
-    assert stored_hash != plaintext
-    assert get_api_key(db_path, plaintext) is not None
-    assert db_path.stat().st_mode & 0o777 == 0o600
-
-    monkeypatch.setattr(
-        sys, "argv", ["auth_cli", "--db", str(db_path), "list"]
+    assert stored_hash != created_secret
+    assert "api-user" in list_users(db_path)
+    assert verify_user(db_path, "api-user", updated_password)
+    assert not verify_user(db_path, "api-user", created_password)
+    assert "cli-owner" not in list_users(db_path)
+    created_key = next(
+        key for key in list_api_keys(db_path) if key["name"] == "created-key"
     )
-    main()
-    assert plaintext not in capsys.readouterr().out
-
-    monkeypatch.setattr(
-        sys, "argv", ["auth_cli", "--db", str(db_path), "revoke", key_id]
+    assert created_key["owner_username"] == "api-user"
+    assert created_key["revoked_at"] is None
+    edited_key = next(
+        key for key in list_api_keys(db_path) if key["id"] == editable_key.id
     )
+    assert edited_key["name"] == "renamed"
+    assert edited_key["role"] == "read-write"
+    assert edited_key["owner_username"] == "api-user"
+    assert edited_key["revoked_at"] is not None
+    assert get_api_key(db_path, old_plaintext) is None
+
+
+def test_interactive_cli_can_select_an_alternate_database(
+    tmp_path, monkeypatch, capsys
+):
+    import sys
+
+    import app.auth_cli as auth_cli
+
+    configured_db = tmp_path / "configured.sqlite3"
+    alternate_db = tmp_path / "alternate.sqlite3"
+    monkeypatch.setenv("TWITCH_M3U_AUTH_DB", str(configured_db))
+    responses = iter([str(alternate_db), "0"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+    monkeypatch.setattr(sys, "argv", ["auth_cli"])
+
+    auth_cli.main()
+
+    assert configured_db.exists()
+    assert alternate_db.exists()
+    assert alternate_db.stat().st_mode & 0o777 == 0o600
+    assert str(alternate_db) in capsys.readouterr().out
+
+
+def test_interactive_cli_rejects_command_line_arguments(monkeypatch, capsys):
+    import sys
+
+    from app.auth_cli import main
+
+    monkeypatch.setattr(sys, "argv", ["auth_cli", "users", "list"])
     main()
-    assert "Revoked API key" in capsys.readouterr().out
+    assert "does not accept command-line arguments" in capsys.readouterr().out
+
+
+def test_startup_does_not_reassign_deleted_users_keys(client):
+    db_path = get_settings().auth_db_path
+    create_user(db_path, "removed-user", "removed-user-password-long-enough")
+    user_key, plaintext = create_api_key(
+        db_path, "custom", "read-only", "removed-user"
+    )
+
+    assert delete_user(db_path, "removed-user")
+    bootstrap_user(db_path, "test-admin", "test-password-long-enough")
+
+    stored = next(key for key in list_api_keys(db_path) if key["id"] == user_key.id)
+    assert stored["revoked_at"] is not None
+    assert stored["owner_username"] is None
     assert get_api_key(db_path, plaintext) is None

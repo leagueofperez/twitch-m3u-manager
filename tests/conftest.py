@@ -31,7 +31,7 @@ def client(tmp_path, monkeypatch):
 
     with TestClient(app) as test_client:
         _key, plaintext = create_api_key(
-            get_settings().auth_db_path, "test-admin", "read-write"
+            get_settings().auth_db_path, "test-admin", "read-write", "test-admin"
         )
         test_client.headers["X-API-Key"] = plaintext
         yield test_client

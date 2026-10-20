@@ -5,7 +5,8 @@
   <section class="card">
     <h1 class="text-xl font-semibold text-white">Iniciar sesión</h1>
     <p class="mt-2 text-sm text-slate-400">Inicia sesión con las credenciales configuradas para esta aplicación.</p>
-    <form id="login-form" class="mt-6 space-y-4" data-next="{{ next }}">
+    <form id="login-form" class="mt-6 space-y-4" method="post" action="/auth/login" data-next="{{ next }}">
+      <input type="hidden" name="next" value="{{ next }}">
       <div>
         <label class="label" for="username">Usuario</label>
         <input id="username" name="username" type="text" class="input" required autocomplete="username" spellcheck="username">

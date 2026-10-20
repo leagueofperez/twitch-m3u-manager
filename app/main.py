@@ -27,9 +27,15 @@ async def lifespan(_: FastAPI):
             "Configure TWITCH_M3U_LOGIN_USERNAME and TWITCH_M3U_LOGIN_PASSWORD "
             "before starting the app."
         )
-    bootstrap_user(
+    initial_api_key = bootstrap_user(
         settings.auth_db_path, settings.login_username, settings.login_password
     )
+    if initial_api_key:
+        print(
+            "Initial read-write API key for configured user "
+            f"{settings.login_username} (shown once): {initial_api_key}",
+            flush=True,
+        )
     yield
 
 

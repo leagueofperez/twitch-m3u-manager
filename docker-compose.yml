@@ -8,6 +8,7 @@ services:
       - "${PORT:-8000}:8000"
     environment:
       PORT: "8000"
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       TWITCH_M3U_DATA_DIR: /app/data
       TWITCH_M3U_AUTH_DB: ${TWITCH_M3U_AUTH_DB:-/app/data/auth.sqlite3}
       TWITCH_M3U_COOKIE_SECURE: ${TWITCH_M3U_COOKIE_SECURE:-true}

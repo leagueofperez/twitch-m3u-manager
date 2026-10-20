@@ -26,6 +26,7 @@ class APIKey:
     id: str
     name: str
     role: str
+    owner_username: str | None
 
 
 @contextmanager
@@ -64,6 +65,10 @@ def initialize(db_path: Path) -> None:
                 password_iterations INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS auth_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash TEXT PRIMARY KEY,
                 username TEXT NOT NULL REFERENCES users(username),
@@ -72,6 +77,18 @@ def initialize(db_path: Path) -> None:
             );
             CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
             """
+        )
+        api_key_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(api_keys)").fetchall()
+        }
+        if "owner_username" not in api_key_columns:
+            connection.execute(
+                """ALTER TABLE api_keys ADD COLUMN owner_username TEXT
+                   REFERENCES users(username) ON DELETE SET NULL"""
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS api_keys_owner ON api_keys(owner_username)"
         )
         session_columns = {
             row["name"]
@@ -112,16 +129,37 @@ def _verify_password(password: str, salt_hex: str, hash_hex: str, iterations: in
     return secrets.compare_digest(candidate, hash_hex)
 
 
-def bootstrap_user(db_path: Path, username: str, password: str) -> None:
+def _clean_username(username: str) -> str:
     clean_username = username.strip()
     if (
         not clean_username
         or len(clean_username) > 100
         or any(not character.isprintable() for character in clean_username)
     ):
-        raise ValueError("login username must be 1-100 printable characters")
+        raise ValueError("username must be 1-100 printable characters")
+    return clean_username
+
+
+def _clean_key_name(name: str) -> str:
+    clean_name = name.strip()
+    if (
+        not clean_name
+        or len(clean_name) > 100
+        or any(not character.isprintable() for character in clean_name)
+    ):
+        raise ValueError("key name must be 1-100 printable characters")
+    return clean_name
+
+
+def _hash_new_password(password: str) -> tuple[str, str]:
     if len(password) < 12:
-        raise ValueError("login password must be at least 12 characters")
+        raise ValueError("password must be at least 12 characters")
+    salt = secrets.token_bytes(16)
+    return salt.hex(), _password_hash(password, salt, PASSWORD_ITERATIONS)
+
+
+def bootstrap_user(db_path: Path, username: str, password: str) -> str | None:
+    clean_username = _clean_username(username)
 
     initialize(db_path)
     with _connect(db_path) as connection:
@@ -130,42 +168,149 @@ def bootstrap_user(db_path: Path, username: str, password: str) -> None:
                FROM users WHERE username = ?""",
             (clean_username,),
         ).fetchone()
-        if existing and _verify_password(
-            password,
-            existing["password_salt"],
-            existing["password_hash"],
-            existing["password_iterations"],
-        ):
+        password_matches = bool(
+            existing
+            and _verify_password(
+                password,
+                existing["password_salt"],
+                existing["password_hash"],
+                existing["password_iterations"],
+            )
+        )
+        if not password_matches:
+            salt_hex, password_hash = _hash_new_password(password)
             connection.execute(
-                "DELETE FROM sessions WHERE username <> ?", (clean_username,)
+                """INSERT INTO users
+                   (username, password_salt, password_hash, password_iterations, updated_at)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(username) DO UPDATE SET
+                     password_salt = excluded.password_salt,
+                     password_hash = excluded.password_hash,
+                     password_iterations = excluded.password_iterations,
+                     updated_at = excluded.updated_at""",
+                (
+                    clean_username,
+                    salt_hex,
+                    password_hash,
+                    PASSWORD_ITERATIONS,
+                    int(time.time()),
+                ),
             )
             connection.execute(
-                "DELETE FROM users WHERE username <> ?", (clean_username,)
+                "DELETE FROM sessions WHERE username = ?", (clean_username,)
             )
-            return
+        migration = connection.execute(
+            "SELECT value FROM auth_metadata WHERE key = 'api_key_owners_v1'"
+        ).fetchone()
+        if migration is None:
+            connection.execute(
+                "UPDATE api_keys SET owner_username = ? WHERE owner_username IS NULL",
+                (clean_username,),
+            )
+            connection.execute(
+                """INSERT INTO auth_metadata (key, value)
+                   VALUES ('api_key_owners_v1', 'complete')"""
+            )
+    return ensure_default_api_key(db_path, clean_username)
 
-        salt = secrets.token_bytes(16)
-        password_hash = _password_hash(password, salt, PASSWORD_ITERATIONS)
+
+def ensure_default_api_key(db_path: Path, username: str) -> str | None:
+    """Create a user's default write key once; return its plaintext only on creation."""
+    initialize(db_path)
+    with _connect(db_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        existing = connection.execute(
+            """SELECT id FROM api_keys
+               WHERE owner_username = ? AND name = 'default'
+                 AND role = 'read-write' AND revoked_at IS NULL""",
+            (username,),
+        ).fetchone()
+        if existing is not None:
+            return None
+
+        key_id = str(uuid.uuid4())
+        plaintext = API_KEY_PREFIX + secrets.token_urlsafe(32)
+        connection.execute(
+            """INSERT INTO api_keys
+               (id, name, key_hash, role, created_at, owner_username)
+               VALUES (?, 'default', ?, 'read-write', ?, ?)""",
+            (key_id, _hash_secret(plaintext), int(time.time()), username),
+        )
+    return plaintext
+
+
+def create_user(db_path: Path, username: str, password: str) -> tuple[str, str]:
+    clean_username = _clean_username(username)
+    salt_hex, password_hash = _hash_new_password(password)
+    initialize(db_path)
+    with _connect(db_path) as connection:
         connection.execute(
             """INSERT INTO users
                (username, password_salt, password_hash, password_iterations, updated_at)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(username) DO UPDATE SET
-                 password_salt = excluded.password_salt,
-                 password_hash = excluded.password_hash,
-                 password_iterations = excluded.password_iterations,
-                 updated_at = excluded.updated_at""",
+               VALUES (?, ?, ?, ?, ?)""",
             (
                 clean_username,
-                salt.hex(),
+                salt_hex,
                 password_hash,
                 PASSWORD_ITERATIONS,
                 int(time.time()),
             ),
         )
-        connection.execute("DELETE FROM sessions WHERE username = ?", (clean_username,))
-        connection.execute("DELETE FROM sessions WHERE username <> ?", (clean_username,))
-        connection.execute("DELETE FROM users WHERE username <> ?", (clean_username,))
+    api_key = ensure_default_api_key(db_path, clean_username)
+    if api_key is None:
+        raise RuntimeError("new user was created without a default API key")
+    return clean_username, api_key
+
+
+def list_users(db_path: Path) -> list[str]:
+    initialize(db_path)
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT username FROM users ORDER BY username"
+        ).fetchall()
+    return [row["username"] for row in rows]
+
+
+def delete_user(db_path: Path, username: str) -> bool:
+    initialize(db_path)
+    with _connect(db_path) as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if not exists:
+            return False
+        now = int(time.time())
+        connection.execute("DELETE FROM sessions WHERE username = ?", (username,))
+        connection.execute(
+            """UPDATE api_keys SET revoked_at = COALESCE(revoked_at, ?),
+               owner_username = NULL WHERE owner_username = ?""",
+            (now, username),
+        )
+        connection.execute("DELETE FROM users WHERE username = ?", (username,))
+    return True
+
+
+def update_user_password(db_path: Path, username: str, password: str) -> bool:
+    clean_username = _clean_username(username)
+    salt_hex, password_hash = _hash_new_password(password)
+    initialize(db_path)
+    with _connect(db_path) as connection:
+        cursor = connection.execute(
+            """UPDATE users SET password_salt = ?, password_hash = ?,
+               password_iterations = ?, updated_at = ? WHERE username = ?""",
+            (
+                salt_hex,
+                password_hash,
+                PASSWORD_ITERATIONS,
+                int(time.time()),
+                clean_username,
+            ),
+        )
+        if cursor.rowcount:
+            connection.execute(
+                "DELETE FROM sessions WHERE username = ?", (clean_username,)
+            )
+    return cursor.rowcount == 1
 
 
 def verify_user(db_path: Path, username: str, password: str) -> bool:
@@ -193,27 +338,65 @@ def verify_user(db_path: Path, username: str, password: str) -> bool:
     )
 
 
-def create_api_key(db_path: Path, name: str, role: str) -> tuple[APIKey, str]:
+def create_api_key(
+    db_path: Path, name: str, role: str, owner_username: str
+) -> tuple[APIKey, str]:
     if role not in {"read-only", "read-write"}:
         raise ValueError("role must be read-only or read-write")
-    clean_name = name.strip()
-    if (
-        not clean_name
-        or len(clean_name) > 100
-        or any(not character.isprintable() for character in clean_name)
-    ):
-        raise ValueError("key name must be 1-100 printable characters")
-
+    clean_name = _clean_key_name(name)
+    clean_owner = _clean_username(owner_username)
     initialize(db_path)
     key_id = str(uuid.uuid4())
     plaintext = API_KEY_PREFIX + secrets.token_urlsafe(32)
     with _connect(db_path) as connection:
+        owner = connection.execute(
+            "SELECT username FROM users WHERE username = ?", (clean_owner,)
+        ).fetchone()
+        if owner is None:
+            raise ValueError(f"user does not exist: {clean_owner}")
         connection.execute(
-            """INSERT INTO api_keys (id, name, key_hash, role, created_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (key_id, clean_name, _hash_secret(plaintext), role, int(time.time())),
+            """INSERT INTO api_keys
+               (id, name, key_hash, role, created_at, owner_username)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                key_id,
+                clean_name,
+                _hash_secret(plaintext),
+                role,
+                int(time.time()),
+                clean_owner,
+            ),
         )
-    return APIKey(key_id, clean_name, role), plaintext
+    return APIKey(key_id, clean_name, role, clean_owner), plaintext
+
+
+def update_api_key(
+    db_path: Path,
+    key_id: str,
+    name: str,
+    role: str,
+    owner_username: str | None,
+) -> bool:
+    if role not in {"read-only", "read-write"}:
+        raise ValueError("role must be read-only or read-write")
+    clean_name = _clean_key_name(name)
+    clean_owner = (
+        _clean_username(owner_username) if owner_username is not None else None
+    )
+    initialize(db_path)
+    with _connect(db_path) as connection:
+        if clean_owner is not None:
+            owner = connection.execute(
+                "SELECT username FROM users WHERE username = ?", (clean_owner,)
+            ).fetchone()
+            if owner is None:
+                raise ValueError(f"user does not exist: {clean_owner}")
+        cursor = connection.execute(
+            """UPDATE api_keys SET name = ?, role = ?, owner_username = ?
+               WHERE id = ? AND revoked_at IS NULL""",
+            (clean_name, role, clean_owner, key_id),
+        )
+    return cursor.rowcount == 1
 
 
 def get_api_key(db_path: Path, plaintext: str) -> APIKey | None:
@@ -221,11 +404,15 @@ def get_api_key(db_path: Path, plaintext: str) -> APIKey | None:
         return None
     with _connect(db_path) as connection:
         row = connection.execute(
-            """SELECT id, name, role FROM api_keys
+            """SELECT id, name, role, owner_username FROM api_keys
                WHERE key_hash = ? AND revoked_at IS NULL""",
             (_hash_secret(plaintext),),
         ).fetchone()
-    return APIKey(row["id"], row["name"], row["role"]) if row else None
+    return (
+        APIKey(row["id"], row["name"], row["role"], row["owner_username"])
+        if row
+        else None
+    )
 
 
 def create_session(db_path: Path, username: str) -> tuple[str, int]:
@@ -256,7 +443,11 @@ def get_session(db_path: Path, session_token: str) -> APIKey | None:
             """,
             (_hash_secret(session_token), now),
         ).fetchone()
-    return APIKey(f"user:{row['username']}", row["username"], "read-write") if row else None
+    return (
+        APIKey(f"user:{row['username']}", row["username"], "read-write", row["username"])
+        if row
+        else None
+    )
 
 
 def delete_session(db_path: Path, session_token: str) -> None:
@@ -283,7 +474,8 @@ def list_api_keys(db_path: Path) -> list[dict[str, str | int | None]]:
     initialize(db_path)
     with _connect(db_path) as connection:
         rows = connection.execute(
-            """SELECT id, name, role, created_at, revoked_at FROM api_keys
+            """SELECT id, name, role, owner_username, created_at, revoked_at
+               FROM api_keys
                ORDER BY created_at, id"""
         ).fetchall()
     return [dict(row) for row in rows]

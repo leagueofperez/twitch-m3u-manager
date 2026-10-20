@@ -284,7 +284,7 @@ def test_m3u_download_accepts_api_key_header_or_camel_case_query_parameter(clien
     from app.config import get_settings
 
     _reader, read_key = create_api_key(
-        get_settings().auth_db_path, "m3u-reader", "read-only"
+        get_settings().auth_db_path, "m3u-reader", "read-only", "test-admin"
     )
     client.headers.pop("X-API-Key")
 
