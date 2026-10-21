@@ -6,6 +6,24 @@ Build and start the application with Docker Compose:
 docker compose up --build -d
 ```
 
+A `justfile` wraps the common tasks. Run `just` to list them:
+
+| Recipe | What it does |
+| --- | --- |
+| `just up` | Start the stack in the background |
+| `just down` | Stop the stack and remove its containers |
+| `just status` | Show the status of the stack |
+| `just rebuild` | Rebuild the image and recreate the containers |
+| `just restart` | Restart the containers without rebuilding them |
+| `just build` | Build the image without starting the stack |
+| `just clean` | Remove the containers, networks and the local image; `./data` is preserved |
+| `just logs` | Follow the application logs |
+| `just shell` | Open a bash shell inside the running container |
+| `just auth-cli` | Run the interactive user and API key management CLI |
+| `just sqlite` | Open a SQLite shell on `/app/data/auth.sqlite3` |
+
+The interactive recipes need a running container, so run `just up` first.
+
 The web UI is available at `http://localhost:8000`. Playlist metadata is stored
 in `./data` and survives container replacement. Set
 `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` to the credentials of a Twitch
@@ -48,6 +66,12 @@ docker compose up -d --build
 ```
 
 Then run the menu with an interactive terminal:
+
+```sh
+just auth-cli
+```
+
+or, without `just`:
 
 ```sh
 docker exec -it twitch-m3u-manager python -m app.auth_cli
