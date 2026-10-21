@@ -156,10 +156,16 @@ the old `read-only` role becomes `public` and the old `read-write` role
 becomes `private`. Key hashes are preserved, so every previously issued secret
 keeps working and only its permissions change.
 
-API keys can be sent with the `X-API-Key` header or as a Bearer token. Only
-`/health`, the login page, and login/logout routes are available without
-authentication; static UI assets are also public. The docs and OpenAPI schema
-require authentication.
+API keys can be sent with the `X-API-Key` header or as a Bearer token. The
+following routes are available without authentication: `/health`, the API
+documentation (`/docs` and `/openapi.json`), the login page, and the
+login/logout routes. Static UI assets are also public. Every other endpoint,
+including the browser UI, requires a key or an active session.
+
+The documentation is public, but the actions it describes are not: the
+OpenAPI schema marks every protected operation with its security
+requirement, so the Swagger UI shows an **Authorize** button. Paste a
+private key there to try the endpoints; without a key they answer `401`.
 
 The CLI defaults to the app's configured auth database:
 `TWITCH_M3U_AUTH_DB`, or `<data-dir>/auth.sqlite3` when unset. At startup, the

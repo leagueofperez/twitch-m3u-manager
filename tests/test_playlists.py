@@ -256,7 +256,7 @@ def test_web_interface_has_no_legacy_proxy_or_generator_features(client, monkeyp
     assert client.get("/api/playlists/demo/live-status").status_code == 404
 
 
-def test_authentication_is_required_except_for_health(client):
+def test_authentication_is_required_except_for_health_and_docs(client):
     assert client.get("/health").status_code == 200
     assert client.get(
         "/api/playlists", headers={"X-API-Key": ""}
@@ -264,17 +264,33 @@ def test_authentication_is_required_except_for_health(client):
     assert client.get(
         "/api/playlists", headers={"X-API-Key": "invalid"}
     ).status_code == 401
-    assert client.get("/openapi.json", headers={"X-API-Key": ""}).status_code == 401
-    assert client.get("/docs", headers={"X-API-Key": ""}).status_code == 401
+    assert client.get("/docs", headers={"X-API-Key": ""}).status_code == 200
+    assert client.get("/openapi.json", headers={"X-API-Key": ""}).status_code == 200
     assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
     schema = client.get("/openapi.json").json()
     assert schema["paths"]["/api/playlists"]["get"]["security"] == [
-        {"ApiKeyHeader": []}
+        {"ApiKeyHeader": [], "BearerAuth": []}
     ]
+    assert schema["paths"]["/m3u/{name}.m3u"]["put"]["security"] == [
+        {"ApiKeyHeader": [], "BearerAuth": []}
+    ]
+    assert schema["paths"]["/health"]["get"].get("security") is None
     assert "apiKey" in {
         parameter["name"]
         for parameter in schema["paths"]["/m3u/{name}.m3u"]["get"]["parameters"]
     }
+
+
+def test_public_docs_do_not_expose_protected_actions(client):
+    client.headers.pop("X-API-Key")
+
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
+    assert client.get("/api/playlists").status_code == 401
+    assert client.get("/m3u/demo.m3u").status_code == 401
+    assert client.post("/api/playlists", json={"name": "blocked"}).status_code == 401
+    assert client.get("/", follow_redirects=False).status_code == 303
 
 
 def test_m3u_download_accepts_api_key_header_or_camel_case_query_parameter(client):

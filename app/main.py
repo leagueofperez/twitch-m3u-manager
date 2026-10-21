@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse
@@ -13,7 +13,6 @@ from .auth_store import bootstrap_user, initialize
 from .config import get_settings
 from .m3u import M3UError
 from .routers import api, auth, m3u as m3u_router, web
-from .security import require_read
 from .templating import BASE_DIR, templates
 
 
@@ -75,12 +74,18 @@ def _authenticated_openapi():
         "in": "header",
         "name": "X-API-Key",
     }
+    schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+    }
     for path, path_item in schema["paths"].items():
         if path in {"/health", "/login", "/auth/login", "/auth/logout"}:
             continue
         for operation in path_item.values():
             if isinstance(operation, dict) and "responses" in operation:
-                operation["security"] = [{"ApiKeyHeader": []}]
+                operation["security"] = [
+                    {"ApiKeyHeader": [], "BearerAuth": []}
+                ]
     app.openapi_schema = schema
     return schema
 
@@ -102,12 +107,12 @@ async def disable_private_route_caching(request: Request, call_next):
     return response
 
 
-@app.get("/docs", include_in_schema=False, dependencies=[Depends(require_read)])
+@app.get("/docs", include_in_schema=False)
 def docs():
     return get_swagger_ui_html(openapi_url="/openapi.json", title="Twitch M3U Manager API")
 
 
-@app.get("/openapi.json", include_in_schema=False, dependencies=[Depends(require_read)])
+@app.get("/openapi.json", include_in_schema=False)
 def openapi():
     return app.openapi()
 
