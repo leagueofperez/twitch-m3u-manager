@@ -32,8 +32,12 @@ async def lifespan(_: FastAPI):
     )
     if initial_api_key:
         print(
-            "Initial read-write API key for configured user "
+            "Initial private API key for configured user "
             f"{settings.login_username} (shown once): {initial_api_key}",
+            flush=True,
+        )
+        print(
+            "Private API keys can read and write playlists. DO NOT SHARE.",
             flush=True,
         )
     yield

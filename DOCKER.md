@@ -30,13 +30,15 @@ local network.
 
 Sign in to the web UI with the configured username and password. The configured
 account is created or updated at startup. If it has no active default key, the
-app creates a read-write key and prints it once to the container logs:
+app creates a private key and prints it once to the container logs:
 
 ```sh
 docker compose logs twitch-m3u-manager
 ```
 
 Treat logs containing a generated key as secrets and store the key securely.
+Private keys can read and write playlists and must not be shared; create a
+public key (`tmm_pub_`, read only) for players and other shareable clients.
 The CLI is an interactive menu for managing users and API keys. If the
 container was created before the menu-driven CLI was added, rebuild and
 recreate it from the updated source first:
@@ -54,9 +56,11 @@ docker exec -it twitch-m3u-manager python -m app.auth_cli
 The menu defaults to the same auth database mounted at `./data/auth.sqlite3`
 and allows selecting another SQLite database path. It supports listing,
 creating, updating passwords for, and deleting users, along with creating,
-listing, editing, and revoking API keys. Password prompts do not echo input;
-new API-key secrets are displayed only once. Deleting a user revokes that
-user's keys and active sessions.
+listing, editing, and revoking API keys. Keys come in two kinds: public
+(`tmm_pub_`, read only, safe to share) and private (`tmm_priv_`, read and
+write, never share). Password prompts do not echo input; new API-key secrets
+are displayed only once. Deleting a user revokes that user's keys and active
+sessions.
 
 To run the container without Compose:
 

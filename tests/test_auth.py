@@ -21,9 +21,9 @@ from app.config import get_settings
 ORIGIN = {"Origin": "http://testserver"}
 
 
-def test_read_only_key_can_read_but_cannot_mutate(client):
+def test_public_key_can_read_but_cannot_mutate(client):
     key, plaintext = create_api_key(
-        get_settings().auth_db_path, "reader", "read-only", "test-admin"
+        get_settings().auth_db_path, "reader", "public", "test-admin"
     )
     client.post("/api/playlists", json={"name": "visible"})
 
@@ -35,7 +35,7 @@ def test_read_only_key_can_read_but_cannot_mutate(client):
         json={"name": "blocked"},
         headers={"X-API-Key": plaintext},
     ).status_code == 403
-    assert key.role == "read-only"
+    assert key.kind == "public"
     page = client.get("/", headers={"X-API-Key": plaintext})
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
@@ -47,6 +47,60 @@ def test_read_only_key_can_read_but_cannot_mutate(client):
     assert playlist.headers["cache-control"] == "no-store"
     assert 'id="add-form"' not in playlist.text
     assert 'data-action="delete-playlist"' not in playlist.text
+
+
+def test_private_key_can_mutate_and_public_key_cannot(client):
+    private_key, private_plaintext = create_api_key(
+        get_settings().auth_db_path, "owner", "private", "test-admin"
+    )
+    public_key, public_plaintext = create_api_key(
+        get_settings().auth_db_path, "shared", "public", "test-admin"
+    )
+
+    assert private_key.kind == "private"
+    assert public_key.kind == "public"
+    assert private_plaintext.startswith("tmm_priv_")
+    assert public_plaintext.startswith("tmm_pub_")
+
+    assert client.post(
+        "/api/playlists",
+        json={"name": "private-write"},
+        headers={"X-API-Key": private_plaintext},
+    ).status_code == 201
+    assert client.post(
+        "/api/playlists",
+        json={"name": "public-write"},
+        headers={"X-API-Key": public_plaintext},
+    ).status_code == 403
+    assert client.delete(
+        "/api/playlists/private-write", headers={"X-API-Key": private_plaintext}
+    ).status_code == 204
+    assert client.delete(
+        "/api/playlists/private-write", headers={"X-API-Key": public_plaintext}
+    ).status_code == 403
+
+
+def test_private_key_is_rejected_in_the_query_string(client):
+    _private_key, private_plaintext = create_api_key(
+        get_settings().auth_db_path, "owner", "private", "test-admin"
+    )
+    _public_key, public_plaintext = create_api_key(
+        get_settings().auth_db_path, "shared", "public", "test-admin"
+    )
+    client.post("/api/playlists", json={"name": "shared-list"})
+    client.headers.pop("X-API-Key")
+
+    assert client.get(
+        "/m3u/shared-list.m3u", params={"apiKey": public_plaintext}
+    ).status_code == 200
+    rejected = client.get(
+        "/m3u/shared-list.m3u", params={"apiKey": private_plaintext}
+    )
+    assert rejected.status_code == 403
+    assert "Private API keys" in rejected.json()["detail"]
+    assert client.get(
+        "/m3u/shared-list.m3u", headers={"X-API-Key": private_plaintext}
+    ).status_code == 200
 
 
 def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
@@ -79,7 +133,7 @@ def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
     session_token = client.cookies["tmm_session"]
     user_session = get_session(get_settings().auth_db_path, session_token)
     assert user_session.name == "test-admin"
-    assert user_session.role == "read-write"
+    assert user_session.kind == "private"
 
     logout = client.post("/auth/logout", json={}, headers=ORIGIN)
     assert logout.status_code == 200
@@ -183,7 +237,7 @@ def test_cookie_authenticated_mutations_require_same_origin(client):
 
 def test_revoking_api_key_invalidates_api_key(client):
     db_path = get_settings().auth_db_path
-    key, plaintext = create_api_key(db_path, "revoke", "read-write", "test-admin")
+    key, plaintext = create_api_key(db_path, "revoke", "private", "test-admin")
 
     assert get_api_key(db_path, plaintext) == key
     assert revoke_api_key(db_path, key.id)
@@ -215,7 +269,7 @@ def test_startup_bootstraps_and_updates_environment_user(client):
     keys = list_api_keys(db_path)
     default_key = next(key for key in keys if key["name"] == "default")
     assert default_key["owner_username"] == "test-admin"
-    assert default_key["role"] == "read-write"
+    assert default_key["kind"] == "private"
 
     replacement = bootstrap_user(
         db_path, "test-admin", "updated-password-long-enough"
@@ -283,11 +337,15 @@ def test_auth_database_migration_keeps_api_keys_but_drops_old_sessions(tmp_path)
             "SELECT owner_username FROM api_keys WHERE id = 'key-id'"
         ).fetchone()[0]
         assert owner == "migration-admin"
+        legacy_key = connection.execute(
+            "SELECT name, kind, owner_username FROM api_keys WHERE id = 'key-id'"
+        ).fetchone()
+        assert tuple(legacy_key) == ("existing", "public", "migration-admin")
         generated_key = connection.execute(
-            """SELECT name, role, owner_username FROM api_keys
+            """SELECT name, kind, owner_username FROM api_keys
                WHERE id != 'key-id'"""
         ).fetchone()
-        assert tuple(generated_key) == ("default", "read-write", "migration-admin")
+        assert tuple(generated_key) == ("default", "private", "migration-admin")
 
 
 def test_bootstrap_requires_strong_password(client):
@@ -307,7 +365,8 @@ def test_bootstrap_generates_one_default_key_for_new_configured_user(tmp_path):
     stored_key = get_api_key(db_path, generated_key)
     assert stored_key.name == "default"
     assert stored_key.owner_username == "first-admin"
-    assert stored_key.role == "read-write"
+    assert stored_key.kind == "private"
+    assert generated_key.startswith("tmm_priv_")
     assert (
         bootstrap_user(db_path, "first-admin", "first-admin-password-long-enough")
         is None
@@ -336,22 +395,70 @@ def test_api_key_metadata_update_validates_owner_and_preserves_secret(tmp_path):
     create_user(db_path, "first-owner", "first-owner-password-long-enough")
     create_user(db_path, "second-owner", "second-owner-password-long-enough")
     key, plaintext = create_api_key(
-        db_path, "original", "read-only", "first-owner"
+        db_path, "original", "public", "first-owner"
     )
 
     assert update_api_key(
-        db_path, key.id, "renamed", "read-write", "second-owner"
+        db_path, key.id, "renamed", "private", "second-owner"
     )
     updated = get_api_key(db_path, plaintext)
     assert updated.id == key.id
     assert updated.name == "renamed"
-    assert updated.role == "read-write"
+    assert updated.kind == "private"
     assert updated.owner_username == "second-owner"
     with pytest.raises(ValueError, match="user does not exist"):
-        update_api_key(db_path, key.id, "renamed", "read-write", "missing-user")
+        update_api_key(db_path, key.id, "renamed", "private", "missing-user")
     assert not update_api_key(
-        db_path, "missing-key", "renamed", "read-write", "second-owner"
+        db_path, "missing-key", "renamed", "private", "second-owner"
     )
+    with pytest.raises(ValueError, match="kind must be public or private"):
+        create_api_key(db_path, "invalid", "read-write", "first-owner")
+
+
+def test_legacy_role_keys_keep_working_after_the_kind_migration(tmp_path):
+    import hashlib
+    import sqlite3
+
+    from app.auth_store import initialize
+
+    db_path = tmp_path / "legacy-role.sqlite3"
+    legacy_secrets = {
+        "legacy-reader": ("tmm_readonlysecret", "read-only"),
+        "legacy-writer": ("tmm_writablesecret", "read-write"),
+    }
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE api_keys (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                key_hash TEXT NOT NULL UNIQUE,
+                role TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                revoked_at INTEGER
+            );
+            """
+        )
+        for key_id, (secret, role) in legacy_secrets.items():
+            connection.execute(
+                "INSERT INTO api_keys (id, name, key_hash, role, created_at)"
+                " VALUES (?, ?, ?, ?, 1)",
+                (
+                    key_id,
+                    key_id,
+                    hashlib.sha256(secret.encode("utf-8")).hexdigest(),
+                    role,
+                ),
+            )
+
+    initialize(db_path)
+
+    reader = get_api_key(db_path, "tmm_readonlysecret")
+    writer = get_api_key(db_path, "tmm_writablesecret")
+    assert reader is not None and reader.kind == "public"
+    assert writer is not None and writer.kind == "private"
+    assert get_api_key(db_path, "tmm_unknownsecret") is None
+    assert {key["kind"] for key in list_api_keys(db_path)} == {"public", "private"}
 
 
 def test_startup_requires_login_credentials(client, monkeypatch):
@@ -379,7 +486,7 @@ def test_interactive_cli_manages_users_and_api_keys(
     db_path = tmp_path / "auth.sqlite3"
     create_user(db_path, "cli-owner", "cli-owner-password-long-enough")
     editable_key, old_plaintext = create_api_key(
-        db_path, "before", "read-only", "cli-owner"
+        db_path, "before", "public", "cli-owner"
     )
     created_password = "new-user-password-long-enough"
     updated_password = "replacement-password-long-enough"
@@ -396,9 +503,9 @@ def test_interactive_cli_manages_users_and_api_keys(
             "",  # Keep the configured database.
             "1", "2", "api-user",  # Create a user.
             "0",  # Return to the main menu.
-            "2", "2", "created-key", "read-only", "api-user",  # Create key.
+            "2", "2", "created-key", "public", "api-user",  # Create key.
             "1",  # List keys; secrets must not appear.
-            "3", editable_key.id, "renamed", "read-write", "api-user",
+            "3", editable_key.id, "renamed", "private", "api-user",
             "4", editable_key.id, "y",  # Revoke edited key.
             "0",  # Return to main menu.
             "1", "3", "api-user",  # Change user password.
@@ -415,11 +522,11 @@ def test_interactive_cli_manages_users_and_api_keys(
     auth_cli.main()
     output = capsys.readouterr().out
 
-    assert output.count("Default read-write API key (shown once):") == 1
+    assert output.count("Default private API key (shown once):") == 1
     assert output.count("\nAPI key (shown once):") == 1
     assert old_plaintext not in output
     default_secret = output.split(
-        "Default read-write API key (shown once): ", 1
+        "Default private API key (shown once): ", 1
     )[1].splitlines()[0]
     created_secret = output.split("\nAPI key (shown once): ", 1)[1].splitlines()[0]
     assert output.count(default_secret) == 1
@@ -449,7 +556,7 @@ def test_interactive_cli_manages_users_and_api_keys(
         key for key in list_api_keys(db_path) if key["id"] == editable_key.id
     )
     assert edited_key["name"] == "renamed"
-    assert edited_key["role"] == "read-write"
+    assert edited_key["kind"] == "private"
     assert edited_key["owner_username"] == "api-user"
     assert edited_key["revoked_at"] is not None
     assert get_api_key(db_path, old_plaintext) is None
@@ -491,7 +598,7 @@ def test_startup_does_not_reassign_deleted_users_keys(client):
     db_path = get_settings().auth_db_path
     create_user(db_path, "removed-user", "removed-user-password-long-enough")
     user_key, plaintext = create_api_key(
-        db_path, "custom", "read-only", "removed-user"
+        db_path, "custom", "public", "removed-user"
     )
 
     assert delete_user(db_path, "removed-user")

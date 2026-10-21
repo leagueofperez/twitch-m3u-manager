@@ -9,8 +9,8 @@
   <p class="mt-1 text-sm text-slate-400">Crea listas M3U de Twitch. Los enlaces HLS se actualizan al descargar cada lista.</p>
 </div>
 
-<div class="grid gap-6 {{ 'lg:grid-cols-3' if api_key_role == 'read-write' else '' }}">
-  <section class="{{ 'lg:col-span-2' if api_key_role == 'read-write' else '' }}">
+<div class="grid gap-6 {{ 'lg:grid-cols-3' if api_key_kind == 'private' else '' }}">
+  <section class="{{ 'lg:col-span-2' if api_key_kind == 'private' else '' }}">
     {% if playlists %}
     <div class="grid gap-4 sm:grid-cols-2">
       {% for p in playlists %}
@@ -37,7 +37,7 @@
     {% endif %}
   </section>
 
-  {% if api_key_role == 'read-write' %}
+  {% if api_key_kind == 'private' %}
   <aside>
     <form id="create-form" class="card space-y-4">
       <h2 class="text-base font-medium text-white">Nueva lista</h2>

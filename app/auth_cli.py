@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Callable
 
 from .auth_store import (
+    KEY_KINDS,
+    PRIVATE,
+    PUBLIC,
     create_api_key,
     create_user,
     delete_user,
@@ -19,6 +22,11 @@ from .auth_store import (
     update_user_password,
 )
 from .config import get_settings
+
+KIND_DESCRIPTIONS = {
+    PUBLIC: "Public key - read only, safe to share (for example with a player).",
+    PRIVATE: "Private key - read and write, DO NOT SHARE.",
+}
 
 
 def _choose(prompt: str, choices: tuple[str, ...]) -> str:
@@ -76,7 +84,8 @@ def _create_user(db_path: Path) -> None:
         return
     username, api_key = create_user(db_path, username, password)
     print(f"Created user: {username}")
-    print(f"Default read-write API key (shown once): {api_key}")
+    print(f"Default private API key (shown once): {api_key}")
+    print(KIND_DESCRIPTIONS[PRIVATE])
 
 
 def _change_user_password(db_path: Path) -> None:
@@ -135,21 +144,24 @@ def _show_api_keys(db_path: Path, active_only: bool = False) -> None:
         state = "revoked" if key["revoked_at"] else "active"
         owner = key["owner_username"] or "<unassigned>"
         print(
-            f'  {key["id"]} | {key["name"]} | {key["role"]} | '
+            f'  {key["id"]} | {key["name"]} | {key["kind"]} | '
             f'{owner} | {state} | created {key["created_at"]}'
         )
 
 
 def _create_api_key(db_path: Path) -> None:
     name = input("Key name: ")
-    role = _choose("Role", ("read-only", "read-write"))
+    print("  public  - read only, safe to share")
+    print("  private - read and write, DO NOT SHARE")
+    kind = _choose("Kind", KEY_KINDS)
     owner = input("Owner username: ")
-    key, plaintext = create_api_key(db_path, name, role, owner)
+    key, plaintext = create_api_key(db_path, name, kind, owner)
     print(f"Created API key: {key.id}")
     print(f"Name: {key.name}")
-    print(f"Role: {key.role}")
+    print(f"Kind: {key.kind}")
     print(f"Owner: {key.owner_username}")
     print(f"API key (shown once): {plaintext}")
+    print(KIND_DESCRIPTIONS[kind])
 
 
 def _edit_api_key(db_path: Path) -> None:
@@ -168,9 +180,14 @@ def _edit_api_key(db_path: Path) -> None:
         return
 
     name = input(f'Name [{key["name"]}]: ').strip() or str(key["name"])
-    role = input(f'Role [{key["role"]}] (read-only/read-write): ').strip().lower()
-    if not role:
-        role = str(key["role"])
+    kind = input(
+        f'Kind [{key["kind"]}] ({" / ".join(KEY_KINDS)}): '
+    ).strip().lower()
+    if not kind:
+        kind = str(key["kind"])
+    if kind not in KEY_KINDS:
+        print(f"Error: kind must be one of: {' / '.join(KEY_KINDS)}.")
+        return
     current_owner = key["owner_username"]
     owner_prompt = current_owner or "<unassigned>"
     owner_input = input(
@@ -180,10 +197,11 @@ def _edit_api_key(db_path: Path) -> None:
         owner = None
     else:
         owner = owner_input or current_owner
-    if not update_api_key(db_path, key_id, name, role, owner):
+    if not update_api_key(db_path, key_id, name, kind, owner):
         print(f"Active API key not found: {key_id}")
         return
     print(f"Updated API key metadata: {key_id}")
+    print(KIND_DESCRIPTIONS[kind])
 
 
 def _revoke_api_key(db_path: Path) -> None:
@@ -203,7 +221,7 @@ def _api_keys_menu(db_path: Path) -> None:
         print("\nAPI keys")
         print("  1. List keys")
         print("  2. Create key")
-        print("  3. Edit key name, role, or owner")
+        print("  3. Edit key name, kind, or owner")
         print("  4. Revoke key")
         print("  0. Back")
         choice = _choose("Select", ("0", "1", "2", "3", "4"))

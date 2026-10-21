@@ -20,26 +20,26 @@ def _require_page_key(request: Request) -> str | RedirectResponse:
         return RedirectResponse(
             f"/login?next={request.url.path}", status_code=303
         )
-    return key.role
+    return key.kind
 
 
 @router.get("/")
 def home(request: Request):
-    role = _require_page_key(request)
-    if isinstance(role, RedirectResponse):
-        return role
+    kind = _require_page_key(request)
+    if isinstance(kind, RedirectResponse):
+        return kind
     return templates.TemplateResponse(
         request,
         "home.html",
-        {"playlists": m3u.list_playlists(), "api_key_role": role},
+        {"playlists": m3u.list_playlists(), "api_key_kind": kind},
     )
 
 
 @router.get("/p/{name}")
 def playlist(request: Request, name: str):
-    role = _require_page_key(request)
-    if isinstance(role, RedirectResponse):
-        return role
+    kind = _require_page_key(request)
+    if isinstance(kind, RedirectResponse):
+        return kind
     entries = m3u.load_playlist(name)
     return templates.TemplateResponse(
         request,
@@ -47,6 +47,6 @@ def playlist(request: Request, name: str):
         {
             "name": name,
             "entries": entries,
-            "api_key_role": role,
+            "api_key_kind": kind,
         },
     )

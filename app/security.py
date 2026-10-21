@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request, status
 
-from .auth_store import APIKey, get_api_key, get_session
+from .auth_store import PRIVATE, PUBLIC, APIKey, get_api_key, get_session
 from .config import get_settings
 
 SESSION_COOKIE = "tmm_session"
@@ -55,6 +55,14 @@ def authenticate_request(request: Request) -> APIKey | None:
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid API key",
                 )
+            if key.kind != PUBLIC:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Private API keys cannot be used in the query string; "
+                        "send them in the X-API-Key header"
+                    ),
+                )
             request.state.api_key_auth = True
             return key
 
@@ -73,16 +81,16 @@ def require_read(request: Request) -> APIKey:
             detail="API key or login required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    request.state.api_key_role = key.role
+    request.state.api_key_kind = key.kind
     return key
 
 
 def require_write(request: Request) -> APIKey:
     key = require_read(request)
-    if key.role != "read-write":
+    if key.kind != PRIVATE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="A read-write API key is required",
+            detail="A private API key is required",
         )
     if not request.state.api_key_auth:
         require_same_origin(request)

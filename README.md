@@ -114,7 +114,7 @@ the login or secure-cookie behavior may not match the external URL.
 
 Use the username/password login at `/login` for the browser UI. The configured
 environment account is created or updated at startup. If it has no active
-default key, startup creates a read-write API key and prints it once to the
+default key, startup creates a private API key and prints it once to the
 application log. Protect these logs like credentials and copy the key to a
 secret manager; it is not stored in plaintext and will not be shown again.
 Manage users and API keys with the interactive CLI:
@@ -126,22 +126,35 @@ python -m app.auth_cli
 The menu supports listing, creating, password-updating, and deleting users.
 Passwords are entered securely; changing one invalidates the user's active
 browser sessions. Deleting a user revokes their API keys and removes their
-sessions. Creating a user also creates a default read-write API key and
+sessions. Creating a user also creates a default private API key and
 displays it once. Protect the output and save the key securely.
 
-For external API clients, create API keys assigned to an existing user.
-Read-only keys can list playlists, view playlist details, and download M3U
-files; read-write keys can also create, import, edit, and delete playlists.
-The key's role determines its permissions; the owner is recorded for
-attribution and key management. The menu can create keys, list key metadata,
-edit an active key's name, role, or owner, and revoke keys. Existing key
-secrets are not retrievable; newly created secrets are displayed only once.
+## API keys: public and private
+
+Every API key is either **public** or **private**:
+
+| Kind | Secret prefix | Permissions | Use |
+| --- | --- | --- | --- |
+| `public` | `tmm_pub_` | Read only: list playlists, view details, download M3U files | Safe to share, for example with an IPTV player |
+| `private` | `tmm_priv_` | Read and write: create, import, edit, and delete playlists | Never share; use it only in request headers |
+
+The secret prefix shows the kind of a key at a glance, so a leaked key can be
+classified without looking it up. The key's kind determines its permissions;
+the owner is recorded for attribution and key management. The CLI can create
+keys of either kind, list key metadata, edit an active key's name, kind, or
+owner, and revoke keys. Existing key secrets are not retrievable; newly
+created secrets are displayed only once.
 
 Keys created before the ownership feature are assigned to the configured
 environment user when the app starts. Deleting a user revokes their keys and
 removes active browser sessions. To replace a lost user key, create another
 key with the CLI; to replace a lost startup key, revoke it and restart the app
 so startup generates and prints a new default key.
+
+Databases created by earlier versions are migrated automatically on startup:
+the old `read-only` role becomes `public` and the old `read-write` role
+becomes `private`. Key hashes are preserved, so every previously issued secret
+keeps working and only its permissions change.
 
 API keys can be sent with the `X-API-Key` header or as a Bearer token. Only
 `/health`, the login page, and login/logout routes are available without
@@ -156,9 +169,10 @@ The CLI displays a new key only once. Use it in API calls with the
 `X-API-Key: <key>` header or `Authorization: Bearer <key>`. Browser login
 creates a 12-hour, HttpOnly session cookie; session-authenticated writes are
 restricted to same-origin requests. M3U players that cannot set headers may
-instead use `/m3u/{name}.m3u?apiKey=<key>` for downloads. Query-string keys can
-appear in browser history, proxy/access logs, and monitoring systems; prefer
-headers where possible and use HTTPS.
+instead use `/m3u/{name}.m3u?apiKey=<key>` for downloads, but only with a
+**public** key: private keys sent in a query string are rejected with
+`403 Forbidden`, because query strings end up in browser history, proxy and
+access logs, and monitoring systems.
 
 Live-channel checks use Twitch's official Helix API and require a Twitch
 developer application's `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` in the

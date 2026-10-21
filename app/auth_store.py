@@ -12,7 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-API_KEY_PREFIX = "tmm_"
+PUBLIC_KEY_PREFIX = "tmm_pub_"
+PRIVATE_KEY_PREFIX = "tmm_priv_"
+PUBLIC = "public"
+PRIVATE = "private"
+KEY_KINDS = (PUBLIC, PRIVATE)
+KEY_PREFIXES = {PUBLIC: PUBLIC_KEY_PREFIX, PRIVATE: PRIVATE_KEY_PREFIX}
 SESSION_TTL_SECONDS = 12 * 60 * 60
 PASSWORD_ITERATIONS = 600_000
 _DUMMY_PASSWORD_SALT = bytes.fromhex("6a2b82af8b60d4a6c40f3ca485cd0631")
@@ -25,7 +30,7 @@ _DUMMY_PASSWORD_HASH = hashlib.pbkdf2_hmac(
 class APIKey:
     id: str
     name: str
-    role: str
+    kind: str
     owner_username: str | None
 
 
@@ -50,20 +55,21 @@ def initialize(db_path: Path) -> None:
     with _connect(db_path) as connection:
         connection.executescript(
             """
-            CREATE TABLE IF NOT EXISTS api_keys (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                key_hash TEXT NOT NULL UNIQUE,
-                role TEXT NOT NULL CHECK (role IN ('read-only', 'read-write')),
-                created_at INTEGER NOT NULL,
-                revoked_at INTEGER
-            );
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 password_iterations INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                key_hash TEXT NOT NULL UNIQUE,
+                kind TEXT NOT NULL CHECK (kind IN ('public', 'private')),
+                created_at INTEGER NOT NULL,
+                revoked_at INTEGER,
+                owner_username TEXT REFERENCES users(username) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS auth_metadata (
                 key TEXT PRIMARY KEY,
@@ -78,41 +84,91 @@ def initialize(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
             """
         )
-        api_key_columns = {
-            row["name"]
-            for row in connection.execute("PRAGMA table_info(api_keys)").fetchall()
-        }
-        if "owner_username" not in api_key_columns:
-            connection.execute(
-                """ALTER TABLE api_keys ADD COLUMN owner_username TEXT
-                   REFERENCES users(username) ON DELETE SET NULL"""
-            )
+        _migrate_sessions_table(connection)
+        _migrate_api_keys_table(connection)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS api_keys_owner ON api_keys(owner_username)"
         )
-        session_columns = {
-            row["name"]
-            for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
-        }
-        if "username" not in session_columns:
-            connection.execute("DROP TABLE sessions")
-            connection.execute(
-                """
-                CREATE TABLE sessions (
-                    token_hash TEXT PRIMARY KEY,
-                    username TEXT NOT NULL REFERENCES users(username),
-                    created_at INTEGER NOT NULL,
-                    expires_at INTEGER NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at)"
-            )
+
+
+def _migrate_sessions_table(connection: sqlite3.Connection) -> None:
+    """Drop the legacy session table that referenced API keys by id."""
+    session_columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
+    }
+    if "username" in session_columns:
+        return
+    connection.execute("DROP TABLE sessions")
+    connection.execute(
+        """
+        CREATE TABLE sessions (
+            token_hash TEXT PRIMARY KEY,
+            username TEXT NOT NULL REFERENCES users(username),
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at)"
+    )
+
+
+def _migrate_api_keys_table(connection: sqlite3.Connection) -> None:
+    """Replace the role-based api_keys table with the public/private kind table.
+
+    Existing secrets are copied verbatim, so keys issued before the migration
+    keep working: read-only keys become public and read-write keys become
+    private.
+    """
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(api_keys)").fetchall()
+    }
+    if "kind" in columns:
+        return
+
+    owner_expression = (
+        "CASE WHEN owner_username IN (SELECT username FROM users)"
+        " THEN owner_username ELSE NULL END"
+        if "owner_username" in columns
+        else "NULL"
+    )
+    kind_expression = (
+        "CASE WHEN role = 'read-only' THEN 'public' ELSE 'private' END"
+        if "role" in columns
+        else "'private'"
+    )
+    connection.executescript(
+        f"""
+        CREATE TABLE api_keys_kind_migration (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            key_hash TEXT NOT NULL UNIQUE,
+            kind TEXT NOT NULL CHECK (kind IN ('public', 'private')),
+            created_at INTEGER NOT NULL,
+            revoked_at INTEGER,
+            owner_username TEXT REFERENCES users(username) ON DELETE SET NULL
+        );
+        INSERT INTO api_keys_kind_migration
+            (id, name, key_hash, kind, created_at, revoked_at, owner_username)
+        SELECT id, name, key_hash, {kind_expression},
+               created_at, revoked_at, {owner_expression}
+        FROM api_keys;
+        DROP TABLE api_keys;
+        ALTER TABLE api_keys_kind_migration RENAME TO api_keys;
+        """
+    )
 
 
 def _hash_secret(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+def _new_secret(kind: str) -> str:
+    """Generate a plaintext secret whose prefix reveals the key kind."""
+    return KEY_PREFIXES[kind] + secrets.token_urlsafe(32)
 
 
 def _password_hash(password: str, salt: bytes, iterations: int) -> str:
@@ -215,25 +271,25 @@ def bootstrap_user(db_path: Path, username: str, password: str) -> str | None:
 
 
 def ensure_default_api_key(db_path: Path, username: str) -> str | None:
-    """Create a user's default write key once; return its plaintext only on creation."""
+    """Create a user's default private key once; return its plaintext only on creation."""
     initialize(db_path)
     with _connect(db_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         existing = connection.execute(
             """SELECT id FROM api_keys
                WHERE owner_username = ? AND name = 'default'
-                 AND role = 'read-write' AND revoked_at IS NULL""",
+                 AND kind = 'private' AND revoked_at IS NULL""",
             (username,),
         ).fetchone()
         if existing is not None:
             return None
 
         key_id = str(uuid.uuid4())
-        plaintext = API_KEY_PREFIX + secrets.token_urlsafe(32)
+        plaintext = _new_secret("private")
         connection.execute(
             """INSERT INTO api_keys
-               (id, name, key_hash, role, created_at, owner_username)
-               VALUES (?, 'default', ?, 'read-write', ?, ?)""",
+               (id, name, key_hash, kind, created_at, owner_username)
+               VALUES (?, 'default', ?, 'private', ?, ?)""",
             (key_id, _hash_secret(plaintext), int(time.time()), username),
         )
     return plaintext
@@ -339,15 +395,15 @@ def verify_user(db_path: Path, username: str, password: str) -> bool:
 
 
 def create_api_key(
-    db_path: Path, name: str, role: str, owner_username: str
+    db_path: Path, name: str, kind: str, owner_username: str
 ) -> tuple[APIKey, str]:
-    if role not in {"read-only", "read-write"}:
-        raise ValueError("role must be read-only or read-write")
+    if kind not in KEY_KINDS:
+        raise ValueError("kind must be public or private")
     clean_name = _clean_key_name(name)
     clean_owner = _clean_username(owner_username)
     initialize(db_path)
     key_id = str(uuid.uuid4())
-    plaintext = API_KEY_PREFIX + secrets.token_urlsafe(32)
+    plaintext = _new_secret(kind)
     with _connect(db_path) as connection:
         owner = connection.execute(
             "SELECT username FROM users WHERE username = ?", (clean_owner,)
@@ -356,29 +412,29 @@ def create_api_key(
             raise ValueError(f"user does not exist: {clean_owner}")
         connection.execute(
             """INSERT INTO api_keys
-               (id, name, key_hash, role, created_at, owner_username)
+               (id, name, key_hash, kind, created_at, owner_username)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 key_id,
                 clean_name,
                 _hash_secret(plaintext),
-                role,
+                kind,
                 int(time.time()),
                 clean_owner,
             ),
         )
-    return APIKey(key_id, clean_name, role, clean_owner), plaintext
+    return APIKey(key_id, clean_name, kind, clean_owner), plaintext
 
 
 def update_api_key(
     db_path: Path,
     key_id: str,
     name: str,
-    role: str,
+    kind: str,
     owner_username: str | None,
 ) -> bool:
-    if role not in {"read-only", "read-write"}:
-        raise ValueError("role must be read-only or read-write")
+    if kind not in KEY_KINDS:
+        raise ValueError("kind must be public or private")
     clean_name = _clean_key_name(name)
     clean_owner = (
         _clean_username(owner_username) if owner_username is not None else None
@@ -392,9 +448,9 @@ def update_api_key(
             if owner is None:
                 raise ValueError(f"user does not exist: {clean_owner}")
         cursor = connection.execute(
-            """UPDATE api_keys SET name = ?, role = ?, owner_username = ?
+            """UPDATE api_keys SET name = ?, kind = ?, owner_username = ?
                WHERE id = ? AND revoked_at IS NULL""",
-            (clean_name, role, clean_owner, key_id),
+            (clean_name, kind, clean_owner, key_id),
         )
     return cursor.rowcount == 1
 
@@ -404,12 +460,12 @@ def get_api_key(db_path: Path, plaintext: str) -> APIKey | None:
         return None
     with _connect(db_path) as connection:
         row = connection.execute(
-            """SELECT id, name, role, owner_username FROM api_keys
+            """SELECT id, name, kind, owner_username FROM api_keys
                WHERE key_hash = ? AND revoked_at IS NULL""",
             (_hash_secret(plaintext),),
         ).fetchone()
     return (
-        APIKey(row["id"], row["name"], row["role"], row["owner_username"])
+        APIKey(row["id"], row["name"], row["kind"], row["owner_username"])
         if row
         else None
     )
@@ -444,7 +500,7 @@ def get_session(db_path: Path, session_token: str) -> APIKey | None:
             (_hash_secret(session_token), now),
         ).fetchone()
     return (
-        APIKey(f"user:{row['username']}", row["username"], "read-write", row["username"])
+        APIKey(f"user:{row['username']}", row["username"], "private", row["username"])
         if row
         else None
     )
@@ -474,7 +530,7 @@ def list_api_keys(db_path: Path) -> list[dict[str, str | int | None]]:
     initialize(db_path)
     with _connect(db_path) as connection:
         rows = connection.execute(
-            """SELECT id, name, role, owner_username, created_at, revoked_at
+            """SELECT id, name, kind, owner_username, created_at, revoked_at
                FROM api_keys
                ORDER BY created_at, id"""
         ).fetchall()
