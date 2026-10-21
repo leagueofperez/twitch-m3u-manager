@@ -12,10 +12,12 @@ RUN apt-get update \
     && mkdir -p /app/data \
     && ln -s /app/data/.sqliterc /root/.sqliterc
 
-COPY start.sh .
+COPY start.sh healthcheck.py ./
 COPY app ./app
 COPY twitch ./twitch
-RUN chmod +x /app/start.sh
+RUN chmod +x /app/start.sh /app/healthcheck.py
 
 EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "/app/healthcheck.py"]
 CMD ["/app/start.sh"]

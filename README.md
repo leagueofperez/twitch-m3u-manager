@@ -206,4 +206,5 @@ overwritten.
 See [DOCKER.md](DOCKER.md) or run `docker compose up --build -d`. A `justfile`
 wraps the common tasks (`just up`, `just down`, `just status`, `just rebuild`,
 `just logs`, `just shell`, `just auth-cli`, `just sqlite`); run `just` to list
-them all.
+them all. The image ships a healthcheck that polls the public `/health`
+endpoint, so `just status` reports the container as `healthy` or `unhealthy`.

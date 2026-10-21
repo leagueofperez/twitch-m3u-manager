@@ -24,6 +24,14 @@ A `justfile` wraps the common tasks. Run `just` to list them:
 
 The interactive recipes need a running container, so run `just up` first.
 
+The image declares a `HEALTHCHECK` that polls the public `/health` endpoint
+every 30 seconds, with a 15-second grace period after startup and 3 retries
+before a container is marked unhealthy. `just status` shows the result in the
+`STATUS` column, and `docker inspect --format '{{json .State.Health}}'
+twitch-m3u-manager` shows the individual probe results. The check uses the
+Python interpreter already present in the image, so no extra package is
+installed.
+
 The web UI is available at `http://localhost:8000`. Playlist metadata is stored
 in `./data` and survives container replacement. Set
 `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` to the credentials of a Twitch

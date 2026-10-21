@@ -29,7 +29,7 @@ down:
     {{compose}} down
 
 # Show the status of the stack
-status:
+ps:
     {{compose}} ps
 
 # Rebuild the image and recreate the containers
@@ -40,9 +40,9 @@ rebuild:
 restart:
     {{compose}} restart
 
-# Remove the containers and networks; ./data is preserved
+# Remove containers and networks; preserve ./data
 clean:
-    {{compose}} down --rm -f --remove-orphans
+    {{compose}} down --remove-orphans
     docker image rm {{image}} 2>/dev/null || true
 
 # Follow the application logs
