@@ -60,6 +60,11 @@ every LiveProxy request; private keys are never accepted in query strings.
 Clients unable to send authentication headers cannot use the protected
 LiveProxy endpoint directly.
 
+The Extractor gateway enforces `MAX_CONTENT_LENGTH` before buffering request
+bodies, including chunked requests. The standalone LiveProxy helper in
+`tools/liveproxy/server.sh` binds to loopback; do not change it to a public
+interface unless you place it behind an authenticated gateway.
+
 The common launcher supervises the FastAPI gateway, Gunicorn Extractor and
 LiveProxy processes. The container healthcheck verifies the public gateway and
 both internal listeners.

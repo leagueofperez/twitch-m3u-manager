@@ -1,7 +1,8 @@
 #!/bin/bash
 
 commands=(liveproxy streamlink python python3)
-host="0.0.0.0"
+# Keep the standalone helper private; expose it only through the authenticated gateway.
+host="127.0.0.1"
 port=53422
 
 for cmd in "${commands[@]}"; do
