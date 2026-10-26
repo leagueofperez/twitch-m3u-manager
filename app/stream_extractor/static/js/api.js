@@ -5,7 +5,25 @@ async function postJson(path, payload) {
     body: JSON.stringify(payload),
   })
 
-  return response.json()
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    data = null
+  }
+
+  if (!response.ok) {
+    const detail = data?.detail ?? data?.error
+    const message = Array.isArray(detail)
+      ? detail.map((item) => item.msg || JSON.stringify(item)).join('; ')
+      : detail || `La solicitud falló (${response.status}).`
+    return { error: message }
+  }
+
+  if (!data || typeof data !== 'object') {
+    return { error: 'El servidor devolvió una respuesta no válida.' }
+  }
+  return data
 }
 
 export function extractStreams(url) {
