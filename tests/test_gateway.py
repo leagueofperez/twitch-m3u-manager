@@ -1,10 +1,15 @@
+import asyncio
 import base64
 from unittest.mock import patch
 
+import pytest
 import requests
+from fastapi import HTTPException
+from starlette.requests import Request
 
 from app.auth_store import create_api_key
 from app.config import get_settings
+from app.routers.gateway import proxy_extractor_request
 
 
 def _upstream_response(body=b"ok", status=200, content_type="text/plain"):
@@ -52,6 +57,51 @@ def test_extractor_gateway_forwards_prefixed_requests_with_auth(client):
     )
     assert send.call_args.kwargs["params"] == [("source", "ui")]
     assert send.call_args.kwargs["headers"]["X-Forwarded-Prefix"] == "/extractor"
+
+
+def test_extractor_gateway_rejects_oversized_bodies_before_upstream(client):
+    with patch("app.routers.gateway.requests.request") as send:
+        response = client.post(
+            "/extractor/extract",
+            content=b"x" * (16_384 + 1),
+            headers={"content-type": "application/octet-stream"},
+        )
+
+    assert response.status_code == 413
+    send.assert_not_called()
+
+
+def test_extractor_gateway_limits_chunked_bodies(client):
+    chunks = iter([b"x" * 9_000, b"x" * 9_000, b"x", b""])
+
+    async def receive():
+        body = next(chunks)
+        return {
+            "type": "http.request",
+            "body": body,
+            "more_body": bool(body),
+        }
+
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/extractor/extract",
+            "raw_path": b"/extractor/extract",
+            "query_string": b"",
+            "headers": [],
+            "server": ("testserver", 80),
+            "client": ("127.0.0.1", 12345),
+        },
+        receive,
+    )
+    with patch("app.routers.gateway.requests.request") as send:
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(proxy_extractor_request(request, "extract"))
+    assert exc_info.value.status_code == 413
+    send.assert_not_called()
 
 
 def test_extractor_read_api_accepts_public_key_but_shorten_requires_private(client):
