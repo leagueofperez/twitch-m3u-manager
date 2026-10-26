@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@source "../templates";
+@source "./js";
+
+@theme {
+  --color-twitch: #6441a5;
+  --color-twitch-dark: #543988;
+  --color-twitch-light: #775ad8;
+}

@@ -55,6 +55,7 @@ def test_healthcheck_uses_the_configured_port(monkeypatch):
     module = _load_healthcheck()
     server, _url = _serve(200)
     monkeypatch.setenv("PORT", str(server.server_port))
+    monkeypatch.setattr(module, "check_internal_services", lambda: 0)
     try:
         assert module.main() == 0
     finally:

@@ -8,8 +8,4 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     set +a
 fi
 
-exec uvicorn app.main:app \
-    --host 0.0.0.0 \
-    --port "${PORT:-8000}" \
-    --proxy-headers \
-    --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}"
+exec python /app/start.py

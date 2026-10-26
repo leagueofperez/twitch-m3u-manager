@@ -6,6 +6,28 @@ the playlist is downloaded or requested. Twitch stream URLs expire, so the
 application stores channel identities—not expiring URLs—and refreshes them for
 every export.
 
+## Aplicación unificada
+
+El contenedor también incluye **Twitch Stream Extractor** y **LiveProxy**,
+protegidos por el mismo inicio de sesión y gateway. Abre la landing en `/` y
+elige una herramienta:
+
+| Aplicación | Ruta |
+| --- | --- |
+| M3U Manager | `/manager` |
+| Stream Extractor | `/extractor` |
+| LiveProxy | `/liveproxy` |
+
+El login y la landing son comunes. Las APIs del Manager conservan sus rutas
+actuales (`/api` y `/m3u`) y sus claves API. El Extractor acepta sesión o clave
+API en `/extractor/extract`; `/extractor/shorten` exige sesión o clave privada.
+Los recursos estáticos son públicos. LiveProxy solo acepta comandos de
+Streamlink para canales de Twitch previamente validados; requiere sesión o
+clave privada y su listener interno no se publica. Los clientes externos de
+LiveProxy deben enviar una clave privada en `X-API-Key` o `Authorization:
+Bearer`; no se aceptan claves en la URL. Un reproductor que no permita enviar
+cabeceras autenticadas no podrá consumir directamente esa ruta protegida.
+
 ## Twitch authentication
 
 The app uses Twitch's official Helix API to check whether channels are live.
@@ -31,7 +53,7 @@ export TWITCH_CLIENT_ID="your-client-id"
 export TWITCH_CLIENT_SECRET="your-client-secret"
 export TWITCH_M3U_LOGIN_USERNAME="admin"
 export TWITCH_M3U_LOGIN_PASSWORD="choose-a-strong-password-at-least-12-chars"
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+./start.sh
 ```
 
 For Docker Compose, put the same variable names in a `.env` file beside
@@ -56,13 +78,15 @@ cp .env.example .env  # edit credentials; set TWITCH_M3U_COOKIE_SECURE=false for
 ```
 
 Open <http://localhost:8000>. The interactive API is at <http://localhost:8000/docs>.
-`start.sh` loads `.env`; if you run Uvicorn directly, export the variables
-yourself first. Use HTTPS in deployments and leave the secure-cookie setting
-enabled. For a trusted reverse proxy, forward the original `Host` and
+`start.sh` loads `.env` and starts the common gateway plus its two internal
+workers. Use HTTPS in deployments and leave the secure-cookie setting enabled.
+For a trusted reverse proxy, forward the original `Host` and
 `X-Forwarded-Proto` headers and set `FORWARDED_ALLOW_IPS` to the proxy's IP or
 CIDR so Uvicorn can safely recognize the external HTTPS scheme. Do not set it
 to `*` if clients can reach the app directly. Run tests with
 `pip install -r requirements-dev.txt && pytest`.
+The Extractor suite runs separately with
+`cd app/stream_extractor && python -m unittest discover -s tests`.
 
 ## Playlists
 

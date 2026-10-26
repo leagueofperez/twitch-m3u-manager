@@ -242,8 +242,8 @@ def test_web_interface_has_no_legacy_proxy_or_generator_features(client, monkeyp
         raise AssertionError("Opening the playlist page must not check Twitch")
 
     monkeypatch.setattr("app.routers.api.check_channels_live", fail_check)
-    home = client.get("/")
-    playlist = client.get("/p/demo")
+    home = client.get("/manager")
+    playlist = client.get("/manager/p/demo")
 
     assert home.status_code == playlist.status_code == 200
     assert "Twitch M3U Manager" in home.text
@@ -290,7 +290,10 @@ def test_public_docs_do_not_expose_protected_actions(client):
     assert client.get("/api/playlists").status_code == 401
     assert client.get("/m3u/demo.m3u").status_code == 401
     assert client.post("/api/playlists", json={"name": "blocked"}).status_code == 401
-    assert client.get("/", follow_redirects=False).status_code == 303
+    assert client.get("/").status_code == 200
+    manager = client.get("/manager", follow_redirects=False)
+    assert manager.status_code == 303
+    assert manager.headers["location"] == "/login?next=/manager"
 
 
 def test_m3u_download_accepts_api_key_header_or_camel_case_query_parameter(client):

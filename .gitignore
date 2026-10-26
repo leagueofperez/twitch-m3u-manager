@@ -1,8 +1,10 @@
 __pycache__/
 .pytest_cache/
+.codegraph/
 *.pyc
 .venv/
 .env
 data/.tmp-*
 data/*.json
 data/auth.sqlite3*
+data/liveproxy/
