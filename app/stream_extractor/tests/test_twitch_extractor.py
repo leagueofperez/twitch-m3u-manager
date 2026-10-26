@@ -61,6 +61,52 @@ class TwitchExtractorTests(unittest.TestCase):
         )
         get.assert_called_once()
 
+    @patch("twitch.manifest.requests.get")
+    def test_master_playlist_resolves_root_relative_variant_urls(self, get):
+        response = Mock()
+        response.text = (
+            "#EXTM3U\n"
+            "#EXT-X-STREAM-INF:BANDWIDTH=123,RESOLUTION=1280x720,FRAME-RATE=60.000\n"
+            "/path/to/720p60/index.m3u8\n"
+        )
+        get.return_value = response
+
+        streams = parse_master_m3u8(
+            "https://example.test/master.m3u8?token=x"
+        )
+
+        self.assertEqual(
+            streams,
+            {
+                "720p60": {
+                    "url": "https://example.test/path/to/720p60/index.m3u8"
+                }
+            },
+        )
+
+    @patch("twitch.manifest.requests.get")
+    def test_video_group_id_resolves_to_media_name(self, get):
+        response = Mock()
+        response.text = (
+            "#EXTM3U\n"
+            '#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID="chunked",NAME="1080p60",DEFAULT=YES\n'
+            '#EXT-X-STREAM-INF:BANDWIDTH=123,VIDEO="chunked"\n'
+            "video/1080p60.m3u8\n"
+        )
+        get.return_value = response
+
+        streams = parse_master_m3u8("https://example.test/master.m3u8")
+
+        self.assertEqual(
+            streams,
+            {
+                "1080p60": {
+                    "url": "https://example.test/video/1080p60.m3u8"
+                }
+            },
+        )
+        self.assertGreater(quality_score("1080p60"), quality_score("chunked"))
+
     @patch("twitch.extraction.fetch_playback_token", return_value=("token", "sig", None))
     @patch(
         "twitch.extraction.parse_master_m3u8",

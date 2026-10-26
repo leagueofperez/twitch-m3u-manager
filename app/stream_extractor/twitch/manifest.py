@@ -1,4 +1,5 @@
 import re
+from urllib.parse import urljoin
 
 import requests
 
@@ -10,7 +11,7 @@ RE_RES_VALUE = re.compile(r"^(\d+)x(\d+)$")
 RE_FRAME_RATE = re.compile(r"FRAME-RATE=([\d.]+)")
 RE_ATTR = re.compile(r'([A-Z-]+)=("[^"]*"|[^,]*)')
 
-NAME_ATTRS = ("VIDEO", "STABLE-VARIANT-ID", "IVS-NAME", "NAME", "GROUP-ID")
+NAME_ATTRS = ("STABLE-VARIANT-ID", "IVS-NAME", "NAME")
 
 
 def _attrs(line):
@@ -20,13 +21,15 @@ def _attrs(line):
     }
 
 
-def _stream_name(info_attrs, group_id):
+def _stream_name(info_attrs, video_groups):
     for key in NAME_ATTRS:
         value = info_attrs.get(key)
         if value:
             return value
-    if group_id:
-        return group_id
+
+    video_group = info_attrs.get("VIDEO")
+    if video_group and video_group in video_groups:
+        return video_groups[video_group]
 
     res = RE_RES_VALUE.match(info_attrs.get("RESOLUTION", ""))
     if res:
@@ -37,13 +40,11 @@ def _stream_name(info_attrs, group_id):
             fps_int = 30
         return f"{res.group(2)}p{fps_int}"
 
-    return "unknown"
+    return video_group or "unknown"
 
 
 def _absolutize(url, base_url):
-    if url.startswith(("http://", "https://")):
-        return url
-    return base_url + url.lstrip("/")
+    return urljoin(base_url, url)
 
 
 def parse_master_m3u8(m3u8_url):
@@ -64,31 +65,33 @@ def parse_master_m3u8(m3u8_url):
             f"No se pudo contactar con Twitch: {exc.__class__.__name__}."
         ) from exc
 
-    base_url = m3u8_url.split("?")[0].rsplit("/", 1)[0] + "/"
+    video_groups = {}
+    lines = [line.strip() for line in resp.text.splitlines() if line.strip()]
+    for line in lines:
+        if not line.startswith("#EXT-X-MEDIA"):
+            continue
+        attrs = _attrs(line)
+        if attrs.get("TYPE") != "VIDEO" or not attrs.get("GROUP-ID") or not attrs.get("NAME"):
+            continue
+        group_id = attrs["GROUP-ID"]
+        if attrs.get("DEFAULT", "NO").upper() == "YES":
+            video_groups[group_id] = attrs["NAME"]
+        else:
+            video_groups.setdefault(group_id, attrs["NAME"])
 
     streams = {}
-    group_id = None
     pending = None
 
-    for raw in resp.text.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-
-        if line.startswith("#EXT-X-MEDIA"):
-            group_id = _attrs(line).get("GROUP-ID") or group_id
-            continue
-
+    for line in lines:
         if line.startswith("#EXT-X-STREAM-INF"):
-            pending = _stream_name(_attrs(line), group_id)
-            group_id = None
+            pending = _stream_name(_attrs(line), video_groups)
             continue
 
         if line.startswith("#"):
             continue
 
         if pending:
-            streams[pending] = {"url": _absolutize(line, base_url)}
+            streams[pending] = {"url": _absolutize(line, m3u8_url)}
             pending = None
 
     return streams
