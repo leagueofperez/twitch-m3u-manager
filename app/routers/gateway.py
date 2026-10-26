@@ -14,6 +14,7 @@ from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 
 EXTRACTOR_URL = os.environ.get("EXTRACTOR_INTERNAL_URL", "http://127.0.0.1:5000")
+EXTRACTOR_MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", "16384"))
 LIVEPROXY_URL = os.environ.get(
     "LIVEPROXY_INTERNAL_URL",
     f"http://127.0.0.1:{os.environ.get('LIVEPROXY_PORT', '53422')}",
@@ -70,7 +71,23 @@ def _make_request(url: str, request: Request) -> requests.Response:
 
 
 async def proxy_extractor_request(request: Request, path: str) -> StreamingResponse:
-    body = await request.body()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length") from exc
+        if declared_length < 0:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length")
+        if declared_length > EXTRACTOR_MAX_CONTENT_LENGTH:
+            raise HTTPException(status_code=413, detail="Request body is too large")
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > EXTRACTOR_MAX_CONTENT_LENGTH:
+            raise HTTPException(status_code=413, detail="Request body is too large")
+        body.extend(chunk)
+
     suffix = f"/{path}" if path else "/"
     headers = {
         "X-Forwarded-Prefix": "/extractor",
@@ -85,7 +102,7 @@ async def proxy_extractor_request(request: Request, path: str) -> StreamingRespo
             request.method,
             f"{EXTRACTOR_URL}{suffix}",
             params=list(request.query_params.multi_items()),
-            data=body,
+            data=bytes(body),
             headers={
                 **{
                     name: request.headers[name]
