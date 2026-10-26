@@ -36,13 +36,11 @@ def test_public_key_can_read_but_cannot_mutate(client):
         headers={"X-API-Key": plaintext},
     ).status_code == 403
     assert key.kind == "public"
-    page = client.get("/", headers={"X-API-Key": plaintext})
+    page = client.get("/manager", headers={"X-API-Key": plaintext})
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
     assert "Crear lista" not in page.text
-    playlist = client.get(
-        "/p/visible", headers={"X-API-Key": plaintext}
-    )
+    playlist = client.get("/manager/p/visible", headers={"X-API-Key": plaintext})
     assert playlist.status_code == 200
     assert playlist.headers["cache-control"] == "no-store"
     assert 'id="add-form"' not in playlist.text
@@ -106,9 +104,9 @@ def test_private_key_is_rejected_in_the_query_string(client):
 def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
     client.headers.pop("X-API-Key")
 
-    unauthenticated = client.get("/", follow_redirects=False)
+    unauthenticated = client.get("/manager", follow_redirects=False)
     assert unauthenticated.status_code == 303
-    assert unauthenticated.headers["location"] == "/login?next=/"
+    assert unauthenticated.headers["location"] == "/login?next=/manager"
 
     page = client.get("/login")
     assert page.status_code == 200
@@ -121,15 +119,15 @@ def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
         json={
             "username": "test-admin",
             "password": "test-password-long-enough",
-            "next": "/p/demo",
+            "next": "/manager/p/demo",
         },
         headers=ORIGIN,
     )
     assert response.status_code == 200
-    assert response.json()["redirect"] == "/p/demo"
+    assert response.json()["redirect"] == "/manager/p/demo"
     assert response.cookies["tmm_session"]
     assert "httponly" in response.headers["set-cookie"].lower()
-    assert client.get("/").status_code == 200
+    assert client.get("/manager").status_code == 200
     session_token = client.cookies["tmm_session"]
     user_session = get_session(get_settings().auth_db_path, session_token)
     assert user_session.name == "test-admin"
@@ -143,16 +141,16 @@ def test_login_creates_expiring_http_only_session_and_logout_revokes_it(client):
 
 def test_login_form_posts_credentials_in_body_and_redirects_without_query(client):
     client.headers.pop("X-API-Key")
-    page = client.get("/login?next=%2Fp%2Fdemo")
+    page = client.get("/login?next=%2Fmanager%2Fp%2Fdemo")
     assert page.status_code == 200
-    assert "name=\"next\" value=\"/p/demo\"" in page.text
+    assert "name=\"next\" value=\"/manager/p/demo\"" in page.text
 
     response = client.post(
         "/auth/login",
         data={
             "username": "test-admin",
             "password": "test-password-long-enough",
-            "next": "/p/demo",
+            "next": "/manager/p/demo",
         },
         headers=ORIGIN,
         follow_redirects=False,
@@ -160,7 +158,7 @@ def test_login_form_posts_credentials_in_body_and_redirects_without_query(client
 
     assert response.status_code == 303
     assert str(response.request.url) == "http://testserver/auth/login"
-    assert response.headers["location"] == "/p/demo"
+    assert response.headers["location"] == "/manager/p/demo"
     assert response.cookies["tmm_session"]
     assert "secure" not in response.headers["set-cookie"].lower()
 

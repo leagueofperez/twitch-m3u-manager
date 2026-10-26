@@ -111,7 +111,7 @@
       if (!confirm(`¿Eliminar la lista '${name}'? Esta acción no se puede deshacer.`)) return;
       await api('DELETE', playlistUrl());
       flash(`Lista '${name}' eliminada`);
-      location.href = '/';
+      location.href = '/manager';
     },
 
     async 'delete-channel'(button) {
@@ -158,7 +158,7 @@
       });
       const statusMessage = channelStatusMessage(created.channel_status || []);
       flash(`Lista '${created.name}' creada${statusMessage ? ` · ${statusMessage}` : ''}`);
-      location.href = `/p/${encodeURIComponent(created.name)}`;
+      location.href = `/manager/p/${encodeURIComponent(created.name)}`;
     },
 
     async 'add-form'(form) {
@@ -221,7 +221,7 @@
           contentType: 'text/plain',
         });
         flash(`Lista '${result.name}' importada (${result.count} entrada(s))`);
-        location.href = `/p/${encodeURIComponent(result.name)}`;
+        location.href = `/manager/p/${encodeURIComponent(result.name)}`;
       });
       importInput.value = '';
     });

@@ -32,8 +32,12 @@ twitch-m3u-manager` shows the individual probe results. The check uses the
 Python interpreter already present in the image, so no extra package is
 installed.
 
-The web UI is available at `http://localhost:8000`. Playlist metadata is stored
-in `./data` and survives container replacement. Set
+The landing page is available at `http://localhost:8000`; the M3U Manager,
+Stream Extractor and LiveProxy are at `/manager`, `/extractor` and `/liveproxy`.
+One gateway container runs the two internal workers; only port 8000 is
+published. Their internal ports 5000 and 53422 are bound to loopback and must
+not be published. Playlist metadata is stored in `./data` and survives
+container replacement. Set
 `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` to the credentials of a Twitch
 developer application so the app can use the official Helix API for live checks.
 API keys and browser sessions are stored in `./data/auth.sqlite3` on the
@@ -44,6 +48,21 @@ it starts; use a password of at least 12 characters. For local HTTP development
 only, set
 `TWITCH_M3U_COOKIE_SECURE=false`; use HTTPS and leave it enabled when deploying
 publicly.
+
+All app interfaces (except the public landing/login) and functional endpoints
+require the shared browser session or an API key. The original M3U API remains
+at `/api` and `/m3u`. The Extractor's
+`/extractor/extract` accepts public or private API keys; the URL-shortening
+mutation requires a private key. LiveProxy only accepts private API keys or a
+browser session and validates the command as a Twitch channel Streamlink
+request. External media clients must send `X-API-Key` or a Bearer token on
+every LiveProxy request; private keys are never accepted in query strings.
+Clients unable to send authentication headers cannot use the protected
+LiveProxy endpoint directly.
+
+The common launcher supervises the FastAPI gateway, Gunicorn Extractor and
+LiveProxy processes. The container healthcheck verifies the public gateway and
+both internal listeners.
 
 For reverse-proxy deployments, forward the original `Host` and
 `X-Forwarded-Proto` headers and set `FORWARDED_ALLOW_IPS` in `.env` to the

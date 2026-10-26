@@ -80,7 +80,7 @@ def test_shared_template_metadata_and_static_assets(client):
     robots = client.get("/robots.txt")
     assert robots.status_code == 200
     assert "User-agent: *" in robots.text
-    assert "/extract" in robots.text
+    assert "/extractor/extract" in robots.text
 
 
 def test_canonical_and_social_urls_use_configured_public_origin(client, monkeypatch):
@@ -88,7 +88,9 @@ def test_canonical_and_social_urls_use_configured_public_origin(client, monkeypa
     monkeypatch.setenv("TWITCH_M3U_PUBLIC_ORIGIN", "https://m3u.example.com/")
     monkeypatch.setenv("TWITCH_M3U_TWITTER_HANDLE", "@twitchm3u")
 
-    page = client.get("/login?next=%2Fp%2Fdemo", headers={"Host": "internal:8000"})
+    page = client.get(
+        "/login?next=%2Fmanager%2Fp%2Fdemo", headers={"Host": "internal:8000"}
+    )
 
     assert page.status_code == 200
     assert '<link rel="canonical" href="https://m3u.example.com/login">' in page.text

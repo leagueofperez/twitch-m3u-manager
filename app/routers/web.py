@@ -8,7 +8,7 @@ from .. import m3u
 from ..security import require_read
 from ..templating import templates
 
-router = APIRouter(include_in_schema=False)
+router = APIRouter(prefix="/manager", include_in_schema=False)
 
 
 def _require_page_key(request: Request) -> str | RedirectResponse:
@@ -23,7 +23,7 @@ def _require_page_key(request: Request) -> str | RedirectResponse:
     return key.kind
 
 
-@router.get("/")
+@router.get("")
 def home(request: Request):
     kind = _require_page_key(request)
     if isinstance(kind, RedirectResponse):

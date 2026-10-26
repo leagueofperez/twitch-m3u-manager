@@ -13,6 +13,7 @@ RUN apt-get update \
     && ln -s /app/data/.sqliterc /root/.sqliterc
 
 COPY start.sh healthcheck.py ./
+COPY start.py ./
 COPY app ./app
 COPY twitch ./twitch
 RUN chmod +x /app/start.sh /app/healthcheck.py

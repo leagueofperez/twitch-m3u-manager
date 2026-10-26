@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import base64
+import re
+from urllib.parse import quote
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import StreamingResponse
 
 from . import __version__
-from .auth_store import bootstrap_user, initialize
+from .auth_store import PRIVATE, bootstrap_user, initialize
 from .config import get_settings
 from .m3u import M3UError
 from .routers import api, auth, m3u as m3u_router, web
+from .routers.gateway import proxy_extractor_request, proxy_liveproxy_request
+from .security import require_read, require_same_origin
 from .templating import BASE_DIR, templates
+
+LIVEPROXY_CHANNEL = re.compile(r"[A-Za-z0-9_]{1,25}")
 
 
 @asynccontextmanager
@@ -59,6 +67,61 @@ app.include_router(api.router)
 app.include_router(m3u_router.router)
 
 
+@app.get("/", include_in_schema=False)
+def landing(request: Request):
+    return templates.TemplateResponse(request, "landing.html")
+
+
+@app.api_route(
+    "/extractor/",
+    methods=["GET", "POST", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+@app.api_route(
+    "/extractor",
+    methods=["GET", "POST", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+@app.api_route(
+    "/extractor/{path:path}",
+    methods=["GET", "POST", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+async def extractor_gateway(request: Request, path: str = ""):
+    return await proxy_extractor_request(request, path)
+
+
+@app.get(
+    "/liveproxy/base64/{command:path}",
+    response_class=StreamingResponse,
+    include_in_schema=False,
+)
+def liveproxy_gateway(request: Request, command: str):
+    return proxy_liveproxy_request(request, command)
+
+
+@app.get("/liveproxy", include_in_schema=False)
+def liveproxy_home(request: Request, channel: str = ""):
+    channel = channel.strip().lower()
+    stream_path = None
+    if channel:
+        if LIVEPROXY_CHANNEL.fullmatch(channel):
+            command = f"streamlink https://twitch.tv/{channel} best".encode("ascii")
+            encoded = base64.b64encode(command).decode("ascii")
+            stream_path = f"/liveproxy/base64/{encoded}/"
+        else:
+            channel = ""
+    return templates.TemplateResponse(
+        request,
+        "liveproxy.html",
+        {
+            "channel": channel,
+            "stream_path": stream_path,
+            "api_key_kind": getattr(request.state, "api_key_kind", None),
+        },
+    )
+
+
 def _authenticated_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -94,14 +157,61 @@ app.openapi = _authenticated_openapi
 
 
 @app.middleware("http")
-async def disable_private_route_caching(request: Request, call_next):
-    response = await call_next(request)
+async def authenticate_apps_and_set_cache_headers(request: Request, call_next):
     path = request.url.path
+    in_extractor = path == "/extractor" or path.startswith("/extractor/")
+    in_liveproxy = path == "/liveproxy" or path.startswith("/liveproxy/")
+    extractor_asset = in_extractor and path.startswith("/extractor/static/")
+    if (in_extractor and not extractor_asset) or in_liveproxy:
+        try:
+            key = require_read(request)
+            if (
+                in_liveproxy or path == "/extractor/shorten"
+            ) and key.kind != PRIVATE:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="A private API key or browser login is required",
+                )
+            if (
+                request.method not in {"GET", "HEAD", "OPTIONS"}
+                and not request.state.api_key_auth
+            ):
+                require_same_origin(request)
+        except HTTPException as exc:
+            if (
+                exc.status_code == status.HTTP_401_UNAUTHORIZED
+                and request.method in {"GET", "HEAD"}
+                and path in {"/extractor", "/extractor/", "/liveproxy"}
+            ):
+                return RedirectResponse(
+                    f"/login?next={quote(request.url.path, safe='/')}",
+                    status_code=303,
+                )
+            return JSONResponse(
+                {"detail": exc.detail},
+                status_code=exc.status_code,
+                headers=exc.headers,
+            )
+
+    response = await call_next(request)
     if path.startswith("/static/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=86400")
+    if path.startswith("/extractor/static/"):
         response.headers.setdefault("Cache-Control", "public, max-age=86400")
     if (
         path == "/"
-        or path.startswith(("/p/", "/api/", "/m3u/", "/docs", "/openapi.json"))
+        or path.startswith(
+            (
+                "/manager",
+                "/p/",
+                "/api/",
+                "/m3u/",
+                "/docs",
+                "/openapi.json",
+                "/extractor",
+                "/liveproxy",
+            )
+        )
     ):
         response.headers.setdefault("Cache-Control", "no-store")
     return response
