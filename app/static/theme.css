@@ -13,7 +13,7 @@ html[data-theme="dark"] {
   gap: 0.25rem;
   border: 1px solid #475569;
   border-radius: 0.5rem;
-  padding: 0.375rem 0.625rem;
+  padding: 0.5rem;
   color: #cbd5e1;
   font-size: 0.75rem;
   line-height: 1rem;
@@ -31,6 +31,25 @@ html[data-theme="dark"] {
 .theme-toggle:focus-visible {
   outline: 2px solid #9146ff;
   outline-offset: 2px;
+}
+
+.theme-toggle-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle-icon svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+}
+
+html:not([data-theme-mode]) .theme-toggle-icon[data-theme-icon="auto"],
+html[data-theme-mode="auto"] .theme-toggle-icon[data-theme-icon="auto"],
+html[data-theme-mode="light"] .theme-toggle-icon[data-theme-icon="light"],
+html[data-theme-mode="dark"] .theme-toggle-icon[data-theme-icon="dark"] {
+  display: inline-flex;
 }
 
 html[data-theme="light"] .theme-toggle {
