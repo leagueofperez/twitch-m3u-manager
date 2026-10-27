@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   {% set page_title = self.title() | striptags | trim %}
   {% set page_description %}{% block description %}Administra listas M3U de canales de Twitch y actualiza sus enlaces HLS al exportarlas.{% endblock %}{% endset %}
   <meta name="description" content="{{ page_description }}">
   <meta name="theme-color" content="#6441a5">
+  <script src="{{ url_for('static', path='theme.js') }}"></script>
   <title>{% block title %}Twitch M3U Manager{% endblock %}</title>
   <link rel="canonical" href="{{ canonical_url }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
@@ -62,6 +64,7 @@
       }
     };
   </script>
+  <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}">
   <style type="text/tailwindcss">
     @layer components {
       .card { @apply rounded-xl border border-slate-800 bg-slate-900/60 p-5; }
@@ -78,20 +81,23 @@
 </head>
 <body class="min-h-full bg-slate-950 text-slate-200 antialiased">
   <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3 lg:flex-nowrap">
       <a href="/manager" class="flex items-center gap-2.5 font-semibold text-white">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">
           <svg viewBox="0 0 24 24" class="h-4 w-4 fill-white" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
         </span>
         Twitch M3U Manager
       </a>
-      <nav class="flex items-center gap-1 text-sm">
+      <nav class="flex flex-wrap items-center justify-end gap-1 text-xs sm:text-sm">
         {% if api_key_kind %}
-        <a href="/" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white">Apps</a>
-        <a href="/manager" class="rounded-lg px-3 py-1.5 {{ 'bg-slate-800 text-white' if active == 'home' else 'text-slate-400 hover:text-white' }}">Listas</a>
-        <a href="/docs" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white">API</a>
+        <a href="/" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3">Apps</a>
+        <a href="/manager" class="rounded-lg px-2 py-1.5 sm:px-3 {{ 'bg-slate-800 text-white' if active == 'home' else 'text-slate-400 hover:text-white' }}">Listas</a>
+        <a href="/docs" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3">API</a>
         <span title="{{ 'Clave privada: control total. No la compartas.' if api_key_kind == 'private' else 'Clave publica: solo lectura. Se puede compartir.' }}" class="rounded-full px-2.5 py-1 text-xs font-medium {{ 'bg-brand-500/15 text-brand-300' if api_key_kind == 'private' else 'bg-slate-800 text-slate-300' }}">{{ 'Control total' if api_key_kind == 'private' else 'Solo lectura' }}</span>
-        <button type="button" class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-white" data-action="logout">Salir</button>
+        {% endif %}
+        <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">Tema: <span data-theme-label>claro</span></button>
+        {% if api_key_kind %}
+        <button type="button" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3" data-action="logout">Salir</button>
         {% endif %}
       </nav>
     </div>

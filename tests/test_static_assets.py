@@ -11,6 +11,9 @@ def test_shared_template_metadata_and_static_assets(client):
     assert 'rel="icon" type="image/svg+xml" href="http://testserver/static/favicon.svg"' in page.text
     assert 'rel="manifest" href="http://testserver/static/site.webmanifest"' in page.text
     assert 'rel="stylesheet" href="http://testserver/static/styles.css"' in page.text
+    assert 'rel="stylesheet" href="http://testserver/static/theme.css"' in page.text
+    assert 'src="http://testserver/static/theme.js"' in page.text
+    assert 'data-theme-toggle' in page.text
     assert (
         '<meta property="og:image" content="http://testserver/static/og-image.png">'
         in page.text
@@ -67,6 +70,8 @@ def test_shared_template_metadata_and_static_assets(client):
         "og-image.png",
         "site.webmanifest",
         "styles.css",
+        "theme.css",
+        "theme.js",
     ):
         response = client.get(f"/static/{asset}")
         assert response.status_code == 200

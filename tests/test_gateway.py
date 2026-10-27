@@ -27,6 +27,7 @@ def test_landing_links_to_the_three_apps_and_new_apps_require_auth(client):
     assert 'href="/manager"' in landing.text
     assert 'href="/extractor"' in landing.text
     assert 'href="/liveproxy"' in landing.text
+    assert 'data-theme-toggle' in landing.text
 
     client.headers.pop("X-API-Key")
     extractor = client.get("/extractor", follow_redirects=False)

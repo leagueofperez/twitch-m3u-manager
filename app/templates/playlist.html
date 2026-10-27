@@ -6,8 +6,8 @@
   <a href="/manager" class="text-sm text-slate-400 hover:text-white">← Listas</a>
 
   <div class="mb-6 mt-3 flex flex-wrap items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <h1 class="break-all text-2xl font-semibold text-white">{{ name }}</h1>
+    <div class="flex min-w-0 items-center gap-3">
+      <h1 class="min-w-0 break-all text-2xl font-semibold text-white">{{ name }}</h1>
       <span class="rounded-full bg-brand-500/15 px-2.5 py-0.5 text-xs font-medium text-brand-300">
         {{ entries | length }} entrada{{ '' if entries | length == 1 else 's' }}
       </span>
@@ -48,7 +48,7 @@
     </div>
     {% if entries %}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
+      <table class="playlist-table min-w-[36rem] w-full text-left text-sm">
         <thead class="bg-slate-900 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th class="px-4 py-3 font-medium">Nombre</th>
