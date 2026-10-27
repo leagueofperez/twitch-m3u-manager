@@ -1,11 +1,15 @@
 # app.py
-from flask import Flask, request
+from pathlib import Path
+
+from flask import Flask, request, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import shortener
 from config import Config
 from routes.api import api
 from routes.pages import pages
+
+SHARED_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 def create_app(config=None):
@@ -26,6 +30,15 @@ def create_app(config=None):
 
     app.register_blueprint(pages)
     app.register_blueprint(api)
+
+    @app.get("/static/theme.css")
+    def shared_theme_css():
+        return send_from_directory(SHARED_STATIC_DIR, "theme.css")
+
+    @app.get("/static/theme.js")
+    def shared_theme_js():
+        return send_from_directory(SHARED_STATIC_DIR, "theme.js")
+
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     return app

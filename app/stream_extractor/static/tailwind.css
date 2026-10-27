@@ -3,7 +3,17 @@
 @source "../templates";
 @source "./js";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
 
 @theme {
   --color-twitch: #6441a5;

@@ -146,7 +146,7 @@ html[data-theme="light"] #import-file:hover::file-selector-button {
   background-color: #cbd5e1;
 }
 
-html[data-theme="light"] a:hover {
+html[data-theme="light"] a:not(.btn):hover {
   color: #6d28d9;
 }
 
