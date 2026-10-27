@@ -1,52 +1,26 @@
-<!doctype html>
-<html lang="es" class="h-full">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#6441a5">
-  <title>Twitch Tools</title>
-  <script src="/static/theme.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/theme.css">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: { brand: { 300: '#bf94ff', 400: '#a970ff', 500: '#9146ff', 600: '#772ce8' } }
-        }
-      }
-    };
-  </script>
-  <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body class="min-h-full bg-slate-950 text-slate-200 antialiased">
-  <main class="mx-auto max-w-5xl px-4 py-8 sm:py-16">
-    <header class="mb-10 flex flex-wrap items-center justify-center gap-4 text-center">
-      <div>
-        <h1 class="text-3xl font-semibold text-white">Twitch Tools</h1>
-        <p class="mt-3 text-slate-400">Elige la herramienta que quieres usar.</p>
-      </div>
-      <button type="button" class="theme-toggle" data-theme-toggle aria-label="Tema: auto" title="Tema: auto (sigue el sistema)">
-        <span class="theme-toggle-icon" data-theme-icon="auto" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
-        <span class="theme-toggle-icon" data-theme-icon="light" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
-        <span class="theme-toggle-icon" data-theme-icon="dark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
-      </button>
-    </header>
-    <div class="grid gap-5 md:grid-cols-3">
-      <a href="/manager" class="tool-card">
-        <h2 class="text-lg font-medium text-white">M3U Manager</h2>
-        <p class="mt-2 text-sm text-slate-400">Crea y administra listas M3U de Twitch.</p>
-      </a>
-      <a href="/extractor" class="tool-card">
-        <h2 class="text-lg font-medium text-white">Stream Extractor</h2>
-        <p class="mt-2 text-sm text-slate-400">Extrae URLs HLS de canales y VODs.</p>
-      </a>
-      <a href="/liveproxy" class="tool-card">
-        <h2 class="text-lg font-medium text-white">LiveProxy</h2>
-        <p class="mt-2 text-sm text-slate-400">Accede al proxy de reproducción de streams.</p>
-      </a>
-    </div>
-  </main>
-</body>
-</html>
+{% extends "base.html" %}
+{% set active = 'tools' %}
+{% block title %}Twitch Tools{% endblock %}
+{% block description %}Elige entre M3U Manager, Stream Extractor y LiveProxy: herramientas para gestionar listas M3U y reproducir streams de Twitch.{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-5xl">
+  <header class="mb-10 text-center">
+    <h1 class="text-3xl font-semibold text-white">Herramientas</h1>
+    <p class="mt-3 text-slate-400">Elige la herramienta que quieres usar.</p>
+  </header>
+  <div class="grid gap-5 md:grid-cols-3">
+    <a href="/manager" class="tool-card">
+      <h2 class="text-lg font-medium text-white">M3U Manager</h2>
+      <p class="mt-2 text-sm text-slate-400">Crea y administra listas M3U de Twitch.</p>
+    </a>
+    <a href="/extractor" class="tool-card">
+      <h2 class="text-lg font-medium text-white">Stream Extractor</h2>
+      <p class="mt-2 text-sm text-slate-400">Extrae URLs HLS de canales y VODs.</p>
+    </a>
+    <a href="/liveproxy" class="tool-card">
+      <h2 class="text-lg font-medium text-white">LiveProxy</h2>
+      <p class="mt-2 text-sm text-slate-400">Accede al proxy de reproducción de streams.</p>
+    </a>
+  </div>
+</div>
+{% endblock %}

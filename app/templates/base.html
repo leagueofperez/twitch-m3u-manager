@@ -80,20 +80,26 @@
   <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
 </head>
 <body class="min-h-full bg-slate-950 text-slate-200 antialiased">
-  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3 lg:flex-nowrap">
-      <a href="/manager" class="flex items-center gap-2.5 font-semibold text-white">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 fill-white" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a href="/" class="site-brand">
+        <span class="site-brand-mark">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
         </span>
-        Twitch M3U Manager
+        Twitch Tools
       </a>
-      <nav class="flex flex-wrap items-center justify-end gap-1 text-xs sm:text-sm">
+      <details class="site-menu">
+        <summary class="site-nav-toggle" aria-controls="site-nav" aria-label="Menú" title="Menú">
+          <span class="site-nav-toggle-icon" data-nav-icon="open" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></span>
+          <span class="site-nav-toggle-icon" data-nav-icon="close" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+        </summary>
+      </details>
+      <nav class="site-nav" id="site-nav" aria-label="Navegación principal">
+        <a href="/" class="site-nav-link{{ ' is-active' if active == 'tools' else '' }}">Herramientas</a>
+        <a href="/manager" class="site-nav-link{{ ' is-active' if active == 'home' else '' }}">Listas</a>
+        <a href="/docs" class="site-nav-link">API</a>
         {% if api_key_kind %}
-        <a href="/" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3">Apps</a>
-        <a href="/manager" class="rounded-lg px-2 py-1.5 sm:px-3 {{ 'bg-slate-800 text-white' if active == 'home' else 'text-slate-400 hover:text-white' }}">Listas</a>
-        <a href="/docs" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3">API</a>
-        <span title="{{ 'Clave privada: control total. No la compartas.' if api_key_kind == 'private' else 'Clave publica: solo lectura. Se puede compartir.' }}" class="rounded-full px-2.5 py-1 text-xs font-medium {{ 'bg-brand-500/15 text-brand-300' if api_key_kind == 'private' else 'bg-slate-800 text-slate-300' }}">{{ 'Control total' if api_key_kind == 'private' else 'Solo lectura' }}</span>
+        <span title="{{ 'Clave privada: control total. No la compartas.' if api_key_kind == 'private' else 'Clave publica: solo lectura. Se puede compartir.' }}" class="site-badge {{ 'is-private' if api_key_kind == 'private' else 'is-public' }}">{{ 'Control total' if api_key_kind == 'private' else 'Solo lectura' }}</span>
         {% endif %}
         <button type="button" class="theme-toggle" data-theme-toggle aria-label="Tema: auto" title="Tema: auto (sigue el sistema)">
           <span class="theme-toggle-icon" data-theme-icon="auto" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
@@ -101,7 +107,9 @@
           <span class="theme-toggle-icon" data-theme-icon="dark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
         </button>
         {% if api_key_kind %}
-        <button type="button" class="rounded-lg px-2 py-1.5 text-slate-400 hover:text-white sm:px-3" data-action="logout">Salir</button>
+        <button type="button" class="site-nav-button" data-action="logout">Salir</button>
+        {% elif active != 'login' %}
+        <a href="/login" class="site-nav-link">Entrar</a>
         {% endif %}
       </nav>
     </div>
@@ -112,6 +120,7 @@
   </main>
 
   <div id="toasts" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+  <script src="{{ url_for('static', path='site.js') }}" defer></script>
   <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </body>
 </html>

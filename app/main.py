@@ -18,7 +18,7 @@ from .config import get_settings
 from .m3u import M3UError
 from .routers import api, auth, m3u as m3u_router, web
 from .routers.gateway import proxy_extractor_request, proxy_liveproxy_request
-from .security import require_read, require_same_origin
+from .security import authenticate_request, require_read, require_same_origin
 from .templating import BASE_DIR, templates
 
 LIVEPROXY_CHANNEL = re.compile(r"[A-Za-z0-9_]{1,25}")
@@ -69,7 +69,15 @@ app.include_router(m3u_router.router)
 
 @app.get("/", include_in_schema=False)
 def landing(request: Request):
-    return templates.TemplateResponse(request, "landing.html")
+    try:
+        key = authenticate_request(request)
+    except HTTPException:
+        key = None
+    return templates.TemplateResponse(
+        request,
+        "landing.html",
+        {"api_key_kind": key.kind if key else None},
+    )
 
 
 @app.api_route(
@@ -248,6 +256,10 @@ async def m3u_error_handler(request: Request, exc: M3UError):
     return templates.TemplateResponse(
         request,
         "error.html",
-        {"status": exc.status_code, "message": str(exc)},
+        {
+            "status": exc.status_code,
+            "message": str(exc),
+            "api_key_kind": getattr(request.state, "api_key_kind", None),
+        },
         status_code=exc.status_code,
     )

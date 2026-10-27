@@ -71,16 +71,35 @@
   </script>
 </head>
 
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen flex flex-col items-center py-8 px-4">
-  <div class="w-full max-w-2xl">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <a href="/" class="inline-block text-sm text-gray-500 hover:text-twitch dark:text-gray-400">← Twitch Tools</a>
-      <button type="button" class="theme-toggle" data-theme-toggle aria-label="Tema: auto" title="Tema: auto (sigue el sistema)">
-        <span class="theme-toggle-icon" data-theme-icon="auto" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
-        <span class="theme-toggle-icon" data-theme-icon="light" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
-        <span class="theme-toggle-icon" data-theme-icon="dark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
-      </button>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 min-h-screen flex flex-col items-center">
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a href="/" class="site-brand">
+        <span class="site-brand-mark">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+        Twitch Tools
+      </a>
+      <details class="site-menu">
+        <summary class="site-nav-toggle" aria-controls="site-nav" aria-label="Menú" title="Menú">
+          <span class="site-nav-toggle-icon" data-nav-icon="open" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></span>
+          <span class="site-nav-toggle-icon" data-nav-icon="close" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+        </summary>
+      </details>
+      <nav class="site-nav" id="site-nav" aria-label="Navegación principal">
+        <a href="/" class="site-nav-link">Herramientas</a>
+        <a href="/manager" class="site-nav-link">Listas</a>
+        <a href="/docs" class="site-nav-link">API</a>
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Tema: auto" title="Tema: auto (sigue el sistema)">
+          <span class="theme-toggle-icon" data-theme-icon="auto" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
+          <span class="theme-toggle-icon" data-theme-icon="light" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+          <span class="theme-toggle-icon" data-theme-icon="dark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+        </button>
+      </nav>
     </div>
+  </header>
+  <main class="w-full max-w-2xl px-4 py-8">
+    <a href="/" class="mb-5 inline-block text-sm text-gray-500 hover:text-twitch dark:text-gray-400">← Herramientas</a>
     <h1 class="text-3xl font-bold text-center text-twitch mb-2">
       Twitch Stream Extractor
     </h1>
@@ -148,7 +167,7 @@
     <!-- Región de anuncios para lectores de pantalla (copiada fuera de #result
            porque su contenido se reemplaza en cada extracción) -->
     <p id="copyStatus" class="sr-only" aria-live="polite" role="status"></p>
-  </div>
+  </main>
 
   <div id="toast" role="status" aria-live="polite" aria-atomic="true"
     class="fixed bottom-4 right-4 z-50 hidden max-w-sm rounded-lg px-4 py-3 pr-12 text-sm font-medium text-white shadow-lg dark:shadow-black/30">
@@ -160,6 +179,7 @@
   </div>
 
   <!-- Módulo ES: necesario para el import de icons.js -->
+  <script src="/static/site.js" defer></script>
   <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 

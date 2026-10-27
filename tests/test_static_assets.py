@@ -13,7 +13,12 @@ def test_shared_template_metadata_and_static_assets(client):
     assert 'rel="stylesheet" href="http://testserver/static/styles.css"' in page.text
     assert 'rel="stylesheet" href="http://testserver/static/theme.css"' in page.text
     assert 'src="http://testserver/static/theme.js"' in page.text
+    assert 'src="http://testserver/static/site.js"' in page.text
     assert 'data-theme-toggle' in page.text
+    assert 'class="site-header"' in page.text
+    assert 'class="site-menu"' in page.text
+    assert 'class="site-nav-toggle"' in page.text
+    assert '>Herramientas</a>' in page.text
     assert 'data-theme-icon="auto"' in page.text
     assert 'data-theme-icon="light"' in page.text
     assert 'data-theme-icon="dark"' in page.text
@@ -25,6 +30,11 @@ def test_shared_template_metadata_and_static_assets(client):
     assert 'html[data-theme-mode="auto"] .theme-toggle-icon' in shared_theme_styles
     assert 'html[data-theme-mode="light"] .theme-toggle-icon' in shared_theme_styles
     assert 'html[data-theme-mode="dark"] .theme-toggle-icon' in shared_theme_styles
+    assert "@media (max-width: 767px)" in shared_theme_styles
+    assert ".site-menu[open] ~ .site-nav" in shared_theme_styles
+    shared_site_script = client.get("/static/site.js").text
+    assert "details.site-menu" in shared_site_script
+    assert "'(min-width: 768px)'" in shared_site_script
     assert (
         '<meta property="og:image" content="http://testserver/static/og-image.png">'
         in page.text
@@ -83,6 +93,7 @@ def test_shared_template_metadata_and_static_assets(client):
         "styles.css",
         "theme.css",
         "theme.js",
+        "site.js",
     ):
         response = client.get(f"/static/{asset}")
         assert response.status_code == 200

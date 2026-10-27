@@ -39,6 +39,10 @@ def create_app(config=None):
     def shared_theme_js():
         return send_from_directory(SHARED_STATIC_DIR, "theme.js")
 
+    @app.get("/static/site.js")
+    def shared_site_js():
+        return send_from_directory(SHARED_STATIC_DIR, "site.js")
+
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     return app

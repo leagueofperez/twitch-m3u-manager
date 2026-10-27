@@ -29,6 +29,11 @@ class AppTests(unittest.TestCase):
         self.assertNotIn(b"cdn.jsdelivr.net", response.data)
         self.assertIn(b'<meta name="color-scheme" content="light dark">', response.data)
         self.assertIn(b'data-theme-toggle', response.data)
+        self.assertIn(b'class="site-header"', response.data)
+        self.assertIn(b'class="site-menu"', response.data)
+        self.assertIn(b'class="site-nav-toggle"', response.data)
+        self.assertIn(b"src=\"/static/site.js\"", response.data)
+        self.assertIn("← Herramientas".encode(), response.data)
         self.assertIn(b"dark:bg-gray-950", response.data)
         css_response = self.client.get("/static/tailwind.generated.css")
         self.assertEqual(css_response.status_code, 200)
@@ -39,7 +44,7 @@ class AppTests(unittest.TestCase):
         css_response.close()
 
     def test_shared_theme_assets_are_available_in_standalone_mode(self):
-        for asset in ("theme.css", "theme.js"):
+        for asset in ("theme.css", "theme.js", "site.js"):
             with self.subTest(asset=asset):
                 response = self.client.get(f"/static/{asset}")
 
