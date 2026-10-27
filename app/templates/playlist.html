@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% set active = 'home' %}
-{% block title %}{{ name }} · Twitch M3U Manager{% endblock %}
+{% block title %}{{ name }} · M3U Manager · Twitch Tools{% endblock %}
+{% block description %}Lista M3U «{{ name }}» con {{ entries | length }} entrada{{ '' if entries | length == 1 else 's' }} de canales de Twitch.{% endblock %}
+{% block og_title %}{{ name }}{% endblock %}
+{% block og_image %}{{ canonical_origin }}/static/og-image.png{% endblock %}
+{% block og_image_alt %}M3U Manager: administra listas M3U de canales de Twitch.{% endblock %}
 {% block content %}
 <div data-playlist="{{ name }}">
   <a href="/manager" class="text-sm text-slate-400 hover:text-white">← Listas</a>

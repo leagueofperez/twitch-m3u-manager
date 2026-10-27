@@ -41,14 +41,45 @@ def _safe_next_path(path: str) -> str:
     return path
 
 
+def _login_preview(path: str) -> dict[str, str] | None:
+    """Social metadata for the protected tool behind a login redirect."""
+    target = urlsplit(path).path
+    if target == "/manager" or target.startswith("/manager/"):
+        return {
+            "title": "M3U Manager",
+            "description": "Inicia sesión para administrar listas M3U de canales de Twitch.",
+            "image_path": "/static/og-image.png",
+            "image_alt": "M3U Manager: administra listas M3U de canales de Twitch.",
+            "path": path,
+        }
+    if target == "/extractor" or target.startswith("/extractor/"):
+        return {
+            "title": "Stream Extractor",
+            "description": "Inicia sesión para extraer URLs m3u8 de streams y VODs de Twitch.",
+            "image_path": "/extractor/static/og-image.png",
+            "image_alt": "Stream Extractor: obtén URLs m3u8 de streams y VODs de Twitch.",
+            "path": path,
+        }
+    if target == "/liveproxy":
+        return {
+            "title": "LiveProxy",
+            "description": "Inicia sesión para generar URLs de reproducción de canales de Twitch.",
+            "image_path": "/static/og-liveproxy.png",
+            "image_alt": "LiveProxy: genera URLs de reproducción para canales de Twitch.",
+            "path": path,
+        }
+    return None
+
+
 @router.get("/login", include_in_schema=False)
 def login_page(request: Request, next: str = "/"):
+    safe_next = _safe_next_path(next)
     if authenticate_request(request):
-        return RedirectResponse(_safe_next_path(next), status_code=303)
+        return RedirectResponse(safe_next, status_code=303)
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"next": _safe_next_path(next)},
+        {"next": safe_next, "login_preview": _login_preview(safe_next)},
         headers={"Cache-Control": "no-store"},
     )
 

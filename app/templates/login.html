@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% set active = 'login' %}
-{% block title %}Iniciar sesión · Twitch M3U Manager{% endblock %}
-{% block description %}Inicia sesión en Twitch M3U Manager para administrar listas M3U de canales de Twitch y actualizar sus enlaces HLS al exportarlas.{% endblock %}
+{% set preview = login_preview|default(none) %}
+{% block title %}Iniciar sesión · Twitch Tools{% endblock %}
+{% block description %}{{ preview.description if preview else 'Inicia sesión en Twitch Tools para administrar listas M3U y usar las herramientas de Twitch.' }}{% endblock %}
+{% block og_title %}{{ preview.title if preview else 'Iniciar sesión' }}{% endblock %}
+{% block og_url %}{{ (canonical_origin ~ preview.path) if preview else canonical_url }}{% endblock %}
+{% block og_image %}{{ (canonical_origin ~ preview.image_path) if preview else (canonical_origin ~ '/static/og-twitch-tools.png') }}{% endblock %}
+{% block og_image_alt %}{{ preview.image_alt if preview else 'Twitch Tools: M3U Manager, Stream Extractor y LiveProxy.' }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-md">
   <section class="card">

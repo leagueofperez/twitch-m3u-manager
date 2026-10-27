@@ -1,3 +1,5 @@
+import json
+import re
 import unittest
 from unittest.mock import patch
 
@@ -51,6 +53,90 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertGreater(len(response.data), 0)
                 response.close()
+
+    def test_page_metadata_uses_the_twitch_tools_brand(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("<title>Stream Extractor · Twitch Tools</title>", html)
+        self.assertIn('<meta property="og:site_name" content="Twitch Tools">', html)
+        self.assertIn('<meta property="og:title" content="Stream Extractor">', html)
+        self.assertIn('<meta name="twitter:title" content="Stream Extractor">', html)
+        self.assertIn('<meta property="og:url" content="http://localhost/">', html)
+        self.assertIn(
+            '<meta property="og:image" content="http://localhost/static/og-image.png">',
+            html,
+        )
+        self.assertIn(
+            '<meta name="twitter:image" content="http://localhost/static/og-image.png">',
+            html,
+        )
+        self.assertIn(
+            '<meta name="twitter:image:alt" content="Stream Extractor: extrae URLs '
+            'm3u8 de streams y VODs de Twitch">',
+            html,
+        )
+        self.assertNotIn("Twitch Stream Extractor", html)
+
+        match = re.search(
+            r'<script type="application/ld\+json">\s*(.*?)\s*</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        structured_data = json.loads(match.group(1))
+        self.assertEqual(structured_data["name"], "Stream Extractor")
+        self.assertEqual(structured_data["url"], "http://localhost/")
+        self.assertEqual(
+            structured_data["image"], "http://localhost/static/og-image.png"
+        )
+        self.assertEqual(structured_data["isPartOf"]["name"], "Twitch Tools")
+
+    def test_page_metadata_uses_the_forwarded_prefix_behind_the_gateway(self):
+        response = self.client.get(
+            "/",
+            headers={
+                "X-Forwarded-Prefix": "/extractor",
+                "X-Forwarded-Host": "m3u.example.com",
+                "X-Forwarded-Proto": "https",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn(
+            '<link rel="canonical" href="https://m3u.example.com/extractor/">', html
+        )
+        self.assertIn(
+            '<meta property="og:url" content="https://m3u.example.com/extractor/">',
+            html,
+        )
+        self.assertIn(
+            '<meta property="og:image" content="https://m3u.example.com/'
+            'extractor/static/og-image.png">',
+            html,
+        )
+        self.assertIn(
+            '<meta name="twitter:image" content="https://m3u.example.com/'
+            'extractor/static/og-image.png">',
+            html,
+        )
+
+        match = re.search(
+            r'<script type="application/ld\+json">\s*(.*?)\s*</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        structured_data = json.loads(match.group(1))
+        self.assertEqual(
+            structured_data["url"], "https://m3u.example.com/extractor/"
+        )
+        self.assertEqual(
+            structured_data["image"],
+            "https://m3u.example.com/extractor/static/og-image.png",
+        )
 
     @patch("services.extraction.extract_streams_for_target", return_value=STREAMS)
     @patch("services.extraction.parse_twitch_url", return_value=(True, "channel"))

@@ -1,7 +1,7 @@
 {
-  "name": "Twitch M3U Manager",
-  "short_name": "M3U Manager",
-  "description": "Administra listas M3U de canales de Twitch y actualiza sus enlaces HLS al exportarlas.",
+  "name": "Twitch Tools",
+  "short_name": "Twitch Tools",
+  "description": "Herramientas para gestionar listas M3U y reproducir streams de Twitch.",
   "lang": "es",
   "dir": "ltr",
   "start_url": "/",
