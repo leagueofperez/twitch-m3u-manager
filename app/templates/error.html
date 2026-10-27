@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% set active = 'home' %}
-{% block title %}Error {{ status }} · Twitch M3U Manager{% endblock %}
+{% block title %}Error {{ status }} · Twitch Tools{% endblock %}
+{% block description %}Se ha producido un error en Twitch Tools.{% endblock %}
+{% block og_title %}Error {{ status }}{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-md py-16 text-center">
   <p class="text-5xl font-semibold text-brand-400">{{ status }}</p>

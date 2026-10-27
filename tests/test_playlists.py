@@ -246,7 +246,7 @@ def test_web_interface_has_no_legacy_proxy_or_generator_features(client, monkeyp
     playlist = client.get("/manager/p/demo")
 
     assert home.status_code == playlist.status_code == 200
-    assert "Twitch M3U Manager" in home.text
+    assert "Twitch Tools" in home.text
     assert "LiveProxy" not in home.text + playlist.text
     assert "Al añadir canales se comprueba si están en directo" in playlist.text
     assert "live-status" not in playlist.text

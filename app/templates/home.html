@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% set active = 'home' %}
-{% block title %}Listas · Twitch M3U Manager{% endblock %}
+{% block title %}M3U Manager · Twitch Tools{% endblock %}
+{% block description %}Crea y administra listas M3U de canales de Twitch y actualiza sus enlaces HLS al exportarlas.{% endblock %}
+{% block og_title %}M3U Manager{% endblock %}
+{% block og_image %}{{ canonical_origin }}/static/og-image.png{% endblock %}
+{% block og_image_alt %}M3U Manager: administra listas M3U de canales de Twitch.{% endblock %}
 {% block content %}
 <div id="playlists" data-names='{{ playlists | map(attribute="name") | list | tojson }}'></div>
 
