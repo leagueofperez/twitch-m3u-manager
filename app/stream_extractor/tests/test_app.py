@@ -34,8 +34,18 @@ class AppTests(unittest.TestCase):
         self.assertEqual(css_response.status_code, 200)
         css = css_response.get_data()
         self.assertIn(b".dark\\:bg-gray-950:where(.dark,.dark *)", css)
-        self.assertNotIn(b"prefers-color-scheme:dark", css)
+        self.assertIn(b"@media (prefers-color-scheme:dark)", css)
+        self.assertIn(b":root:not([data-theme=light])", css)
         css_response.close()
+
+    def test_shared_theme_assets_are_available_in_standalone_mode(self):
+        for asset in ("theme.css", "theme.js"):
+            with self.subTest(asset=asset):
+                response = self.client.get(f"/static/{asset}")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertGreater(len(response.data), 0)
+                response.close()
 
     @patch("services.extraction.extract_streams_for_target", return_value=STREAMS)
     @patch("services.extraction.parse_twitch_url", return_value=(True, "channel"))

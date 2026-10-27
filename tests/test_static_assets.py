@@ -14,6 +14,9 @@ def test_shared_template_metadata_and_static_assets(client):
     assert 'rel="stylesheet" href="http://testserver/static/theme.css"' in page.text
     assert 'src="http://testserver/static/theme.js"' in page.text
     assert 'data-theme-toggle' in page.text
+    theme_styles = client.get("/static/styles.css").text
+    assert 'html[data-theme="light"] a:not(.btn):hover' in theme_styles
+    assert 'html[data-theme="light"] a:hover' not in theme_styles
     assert (
         '<meta property="og:image" content="http://testserver/static/og-image.png">'
         in page.text
