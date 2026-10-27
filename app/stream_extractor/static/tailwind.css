@@ -3,6 +3,8 @@
 @source "../templates";
 @source "./js";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-twitch: #6441a5;
   --color-twitch-dark: #543988;

@@ -4,3 +4,153 @@ body {
     -apple-system,
     sans-serif;
 }
+
+.tool-card {
+  display: block;
+  border: 1px solid #1e293b;
+  border-radius: 0.75rem;
+  background: rgb(15 23 42 / 60%);
+  padding: 1.5rem;
+  transition:
+    border-color 150ms,
+    background-color 150ms;
+}
+
+.tool-card:hover {
+  border-color: rgb(145 70 255 / 60%);
+}
+
+html[data-theme="light"] body {
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+html[data-theme="light"] header {
+  border-color: #e2e8f0;
+  background-color: rgb(255 255 255 / 92%);
+}
+
+html[data-theme="light"] .card,
+html[data-theme="light"] .tool-card {
+  border-color: #e2e8f0;
+  background-color: #fff;
+}
+
+html[data-theme="light"] .input {
+  border-color: #cbd5e1;
+  background-color: #fff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .input::placeholder {
+  color: #94a3b8;
+}
+
+html[data-theme="light"] .label,
+html[data-theme="light"] .text-slate-400 {
+  color: #475569;
+}
+
+html[data-theme="light"] .text-slate-500 {
+  color: #64748b;
+}
+
+html[data-theme="light"] .text-slate-200 {
+  color: #334155;
+}
+
+html[data-theme="light"] .text-white:not(.btn-primary) {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .text-brand-300,
+html[data-theme="light"] .text-brand-400 {
+  color: #6d28d9;
+}
+
+html[data-theme="light"] .bg-brand-500\/15 {
+  background-color: #f3e8ff;
+}
+
+html[data-theme="light"] .border-slate-800,
+html[data-theme="light"] .border-slate-700,
+html[data-theme="light"] .divide-slate-800 {
+  border-color: #e2e8f0;
+}
+
+html[data-theme="light"] .bg-slate-800 {
+  background-color: #e2e8f0;
+}
+
+html[data-theme="light"] .text-slate-300 {
+  color: #475569;
+}
+
+html[data-theme="light"] .bg-red-950 {
+  border-color: #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .bg-emerald-950 {
+  border-color: #a7f3d0;
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+html[data-theme="light"] .btn-ghost {
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+html[data-theme="light"] .btn-ghost:hover {
+  background-color: #f1f5f9;
+}
+
+html[data-theme="light"] .btn-danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .btn-danger:hover {
+  background-color: #fef2f2;
+}
+
+html[data-theme="light"] .tool-card h2 {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .playlist-table thead {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+html[data-theme="light"] .playlist-table tbody {
+  border-color: #e2e8f0;
+}
+
+html[data-theme="light"] .playlist-table tr[data-row]:hover {
+  background-color: #f8fafc;
+}
+
+html[data-theme="light"] #import-file {
+  color: #475569;
+}
+
+html[data-theme="light"] #import-file::file-selector-button {
+  background-color: #e2e8f0;
+  color: #334155;
+}
+
+html[data-theme="light"] #import-file:hover::file-selector-button {
+  background-color: #cbd5e1;
+}
+
+html[data-theme="light"] a:hover {
+  color: #6d28d9;
+}
+
+html[data-theme="light"] .text-brand-300:hover,
+html[data-theme="light"] .text-brand-400:hover {
+  color: #5b21b6;
+}
