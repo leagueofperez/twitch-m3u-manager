@@ -1,3 +1,7 @@
+from collections import OrderedDict
+import threading
+import time
+
 import requests
 
 from twitch.client import build_usher_url, fetch_playback_token
@@ -5,8 +9,13 @@ from twitch.errors import ChannelNotFound, ChannelOffline, TwitchError
 from twitch.manifest import parse_master_m3u8, quality_score
 from twitch.urls import parse_twitch_url
 
+LIVE_STREAM_CACHE_TTL = 10
+LIVE_STREAM_CACHE_MAX_SIZE = 128
+_live_stream_cache = OrderedDict()
+_live_stream_cache_lock = threading.Lock()
 
-def extract_streams_for_target(is_live, target, *, known_live=False):
+
+def _extract_streams_for_target(is_live, target, *, known_live=False):
     try:
         token, sig, reason = fetch_playback_token(
             target,
@@ -46,6 +55,30 @@ def extract_streams_for_target(is_live, target, *, known_live=False):
             streams.items(), key=lambda kv: quality_score(kv[0]), reverse=True
         )
     ]
+
+
+def extract_streams_for_target(is_live, target, *, known_live=False):
+    if not is_live:
+        return _extract_streams_for_target(is_live, target, known_live=known_live)
+
+    key = target.casefold()
+    now = time.monotonic()
+    with _live_stream_cache_lock:
+        cached = _live_stream_cache.get(key)
+        if cached and cached[0] > now:
+            _live_stream_cache.move_to_end(key)
+            return [stream.copy() for stream in cached[1]]
+        if cached:
+            del _live_stream_cache[key]
+
+    streams = _extract_streams_for_target(is_live, target, known_live=known_live)
+    expires_at = time.monotonic() + LIVE_STREAM_CACHE_TTL
+    with _live_stream_cache_lock:
+        _live_stream_cache[key] = (expires_at, tuple(stream.copy() for stream in streams))
+        _live_stream_cache.move_to_end(key)
+        while len(_live_stream_cache) > LIVE_STREAM_CACHE_MAX_SIZE:
+            _live_stream_cache.popitem(last=False)
+    return streams
 
 
 def extract_streams_from_url(twitch_url):

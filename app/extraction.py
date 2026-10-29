@@ -1,6 +1,8 @@
 """Resolve managed Twitch entries only when generating a downloadable playlist."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from . import m3u
 from twitch import (
     ChannelNotFound,
@@ -11,6 +13,8 @@ from twitch import (
     extract_streams_for_target,
     quality_score,
 )
+
+_MAX_CONCURRENT_EXTRACTIONS = 4
 
 
 class ExtractionFailed(m3u.M3UError):
@@ -50,32 +54,45 @@ def check_channels_live(channels: list[str]) -> dict[str, bool]:
 
 
 def resolve_entries(entries: list[m3u.Entry]) -> list[m3u.Entry]:
-    resolved: list[m3u.Entry] = []
+    resolved: list[m3u.Entry | None] = [None] * len(entries)
     failures: list[str] = []
     live_status = check_playlist_channels(entries)
-    for entry in entries:
+    pending: list[tuple[int, m3u.Entry]] = []
+    for index, entry in enumerate(entries):
         if not entry.channel:
-            resolved.append(entry)
+            resolved[index] = entry
             continue
-        if not live_status.get(entry.channel.casefold(), False):
-            continue
+        if live_status.get(entry.channel.casefold(), False):
+            pending.append((index, entry))
+
+    def extract(entry: m3u.Entry) -> tuple[m3u.Entry | None, str | None]:
         try:
             streams = extract_streams_for_target(True, entry.channel, known_live=True)
             if not streams:
                 raise TwitchError("Twitch no devolvio streams.")
             stream = max(streams, key=lambda item: quality_score(item["quality"]))
-            resolved.append(m3u.Entry(name=entry.name, url=stream["url"]))
+            return m3u.Entry(name=entry.name, url=stream["url"]), None
         except (ChannelOffline, ChannelNotFound):
-            continue
+            return None, None
         except TwitchRateLimited as exc:
             raise UpstreamRateLimited(exc.retry_after) from exc
         except TwitchError as exc:
-            failures.append(f"{entry.channel} ({exc})")
+            return None, f"{entry.channel} ({exc})"
+
+    if pending:
+        with ThreadPoolExecutor(
+            max_workers=min(_MAX_CONCURRENT_EXTRACTIONS, len(pending))
+        ) as executor:
+            results = executor.map(extract, (entry for _, entry in pending))
+            for (index, _), (resolved_entry, failure) in zip(pending, results):
+                resolved[index] = resolved_entry
+                if failure:
+                    failures.append(failure)
 
     if failures:
         failed = ", ".join(failures)
         raise ExtractionFailed(f"No se pudo extraer el stream de: {failed}")
-    return resolved
+    return [entry for entry in resolved if entry is not None]
 
 
 def render_playlist(entries: list[m3u.Entry]) -> str:

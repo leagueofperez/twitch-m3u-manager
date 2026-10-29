@@ -3,7 +3,7 @@ import base64
 import pytest
 
 from app import m3u
-from app.extraction import ExtractionFailed, render_playlist
+from app.extraction import ExtractionFailed, render_playlist, resolve_entries
 from twitch import TwitchError
 
 
@@ -120,6 +120,46 @@ def test_export_checks_all_channels_and_only_extracts_live_channels(client, monk
     assert events == ["check", "extract"]
     assert "ibai" in response.text
     assert "offline" not in response.text
+
+
+def test_playlist_resolution_extracts_concurrently_and_preserves_order(monkeypatch):
+    from threading import Barrier, Lock
+
+    barrier = Barrier(2)
+    lock = Lock()
+    active = 0
+    max_active = 0
+
+    def extract(_is_live, channel, *, known_live):
+        nonlocal active, max_active
+        assert known_live is True
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            barrier.wait(timeout=5)
+            return [{"quality": "720p", "url": f"https://cdn.test/{channel}.m3u8"}]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr("app.extraction.check_live_channels", lambda channels: {
+        channel: True for channel in channels
+    })
+    monkeypatch.setattr("app.extraction.extract_streams_for_target", extract)
+    entries = [
+        m3u.Entry(f"channel{i}", None, f"channel{i}")
+        for i in range(8)
+    ]
+
+    resolved = resolve_entries(entries)
+
+    assert max_active > 1
+    assert max_active <= 4
+    assert [entry.name for entry in resolved] == [entry.name for entry in entries]
+    assert [entry.url for entry in resolved] == [
+        f"https://cdn.test/channel{i}.m3u8" for i in range(8)
+    ]
 
 
 def test_export_fails_clearly_if_initial_live_check_fails(client, monkeypatch):
